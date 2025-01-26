@@ -16,8 +16,7 @@ if TOKEN is None:
 
 class MediaDownload(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
+        intents = discord.Intents.all()
         super().__init__(command_prefix='/', intents=intents)
         
         # Supported media types
@@ -33,10 +32,10 @@ class MediaDownload(commands.Bot):
         await self.add_cog(DownloadCog(self))
         print("🔄 Syncing slash commands...")
         try:
-            synced = await self.tree.sync()
-            print(f"✅ {len(synced)} slash commands synced!")
+            commands = await self.tree.sync()
+            print(f"✅ {len(commands)} commands synced!")
         except Exception as e:
-            print(f"❌ Sync error: {e}")
+            print(f"❌ Error: {e}")
 
     async def on_ready(self):
         print(f"✅ Logged in as {self.user}")
@@ -66,8 +65,8 @@ class DownloadCog(commands.Cog):
     @app_commands.command(name="help", description="Shows bot help")
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="📥 MediaDownload Help",
-            description="Easily download media from a channel",
+            title="📥 Media Downloader",
+            description="Download media files from any channel",
             color=self.color
         )
         
@@ -75,14 +74,12 @@ class DownloadCog(commands.Cog):
             name="📌 Commands",
             value=(
                 "`/download type:[type] number:[number]`\n"
-                "Download specified media type\n\n"
-                "`/downloadall`\n"
-                "Download all videos from channel\n\n"
+                "Download your selected media files\n\n"
                 "**Available types:**\n"
-                "• `images` - Photos\n"
-                "• `videos` - Videos\n"
-                "• `gifs` - GIFs\n"
-                "• `all` - All media"
+                "• `images` - Download images\n"
+                "• `videos` - Download videos\n"
+                "• `gifs` - Download GIFs\n"
+                "• `all` - Download all media"
             ),
             inline=False
         )
@@ -92,101 +89,13 @@ class DownloadCog(commands.Cog):
             value=(
                 "`/download type:images number:50` - Last 50 images\n"
                 "`/download type:videos number:All` - All videos\n"
-                "`/download type:all number:All` - All media"
+                "`/download type:all number:All` - All media files"
             ),
             inline=False
         )
         
         embed.set_footer(text="Bot created by Arthur")
         await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="downloadall", description="Download all videos from channel")
-    async def download_all_videos(self, interaction: discord.Interaction):
-        await interaction.response.send_message("🔍 Searching for all videos...")
-        status_message = await interaction.original_response()
-        
-        # Collect videos
-        media_files = []
-        total_size = 0
-        processed_messages = 0
-        
-        async for message in interaction.channel.history(limit=None):
-            processed_messages += 1
-            if processed_messages % 100 == 0:
-                await status_message.edit(content=f"🔍 Searching... ({processed_messages} messages processed)")
-            
-            for attachment in message.attachments:
-                if any(attachment.filename.lower().endswith(ext) for ext in self.bot.media_types['🎥 videos']):
-                    media_files.append(attachment)
-                    total_size += attachment.size
-
-        if not media_files:
-            await status_message.edit(content="❌ No videos found in this channel.")
-            return
-
-        try:
-            # Create scripts
-            batch_content = self._create_batch_script(media_files)
-            shell_content = self._create_shell_script(media_files)
-
-            # Create thread
-            thread = await interaction.channel.create_thread(
-                name=f"📥 Video Download (all messages, {len(media_files)} files)",
-                type=discord.ChannelType.public_thread
-            )
-
-            # Send information
-            embed = discord.Embed(
-                title="📥 Download Ready!",
-                description="Choose script based on your system:",
-                color=self.color
-            )
-            
-            embed.add_field(
-                name="📊 Summary",
-                value=(
-                    f"• Messages processed: {processed_messages}\n"
-                    f"• Type: 🎥 videos\n"
-                    f"• Files found: {len(media_files)}\n"
-                    f"• Total size: {self._format_size(total_size)}"
-                ),
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🪟 Windows",
-                value="1. Download `download.bat`\n2. Double-click it",
-                inline=True
-            )
-            
-            embed.add_field(
-                name="🐧 Linux/Mac",
-                value="1. Download `download.sh`\n2. `chmod +x download.sh`\n3. `./download.sh`",
-                inline=True
-            )
-
-            await thread.send(embed=embed)
-
-            # Send scripts
-            await thread.send(
-                "📦 Download scripts:",
-                files=[
-                    discord.File(io.BytesIO(batch_content.encode()), "download.bat"),
-                    discord.File(io.BytesIO(shell_content.encode()), "download.sh")
-                ]
-            )
-
-            # Update status
-            embed_status = discord.Embed(
-                description=f"✅ Scripts available in {thread.mention}",
-                color=self.color
-            )
-            await status_message.edit(content=None, embed=embed_status)
-
-        except Exception as e:
-            await status_message.edit(content=f"❌ An error occurred: {str(e)}")
-            if 'thread' in locals():
-                await thread.delete()
 
     @app_commands.command(name="download", description="Download specified media")
     @app_commands.choices(
@@ -436,4 +345,4 @@ async def main():
 
 # Start bot
 import asyncio
-asyncio.run(main())
+asyncio.run(main()) 
