@@ -16,7 +16,8 @@ if TOKEN is None:
 
 class MediaDownload(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.all()
+        intents = discord.Intents.default()
+        intents.message_content = True
         super().__init__(command_prefix='/', intents=intents)
         
         # Supported media types
@@ -32,10 +33,10 @@ class MediaDownload(commands.Bot):
         await self.add_cog(DownloadCog(self))
         print("🔄 Syncing slash commands...")
         try:
-            commands = await self.tree.sync()
-            print(f"✅ {len(commands)} commands synced!")
+            synced = await self.tree.sync()
+            print(f"✅ {len(synced)} slash commands synced!")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Sync error: {e}")
 
     async def on_ready(self):
         print(f"✅ Logged in as {self.user}")
@@ -97,7 +98,7 @@ class DownloadCog(commands.Cog):
         embed.set_footer(text="Bot created by Arthur")
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="download", description="Download specified media")
+    @app_commands.command(name="download", description="Download media files")
     @app_commands.choices(
         type=[
             app_commands.Choice(name="Images", value="images"),
@@ -160,7 +161,7 @@ class DownloadCog(commands.Cog):
                         total_size += attachment.size
 
         if not media_files:
-            await status_message.edit(content=f"❌ No {clean_type} media found.")
+            await status_message.edit(content=f"❌ No {clean_type} found in this channel.")
             return
 
         try:
@@ -183,12 +184,12 @@ class DownloadCog(commands.Cog):
             # Send information
             embed = discord.Embed(
                 title="📥 Download Ready!",
-                description="Choose script based on your system:",
+                description="Choose the script for your operating system:",
                 color=self.color
             )
             
             # Scope description
-            scope_desc = f"• Messages processed: {processed_messages}\n"
+            scope_desc = f"• Messages scanned: {processed_messages}\n"
             if limit:
                 scope_desc += f"• Limit: {limit} messages\n"
             else:
@@ -207,13 +208,13 @@ class DownloadCog(commands.Cog):
             
             embed.add_field(
                 name="🪟 Windows",
-                value="1. Download `download.bat`\n2. Double-click it",
+                value="1. Download `download.bat`\n2. Double-click to run",
                 inline=True
             )
             
             embed.add_field(
                 name="🐧 Linux/Mac",
-                value="1. Download `download.sh`\n2. `chmod +x download.sh`\n3. `./download.sh`",
+                value="1. Download `download.sh`\n2. Run `chmod +x download.sh`\n3. Run `./download.sh`",
                 inline=True
             )
 
@@ -230,13 +231,13 @@ class DownloadCog(commands.Cog):
 
             # Update status
             embed_status = discord.Embed(
-                description=f"✅ Scripts available in {thread.mention}",
+                description=f"✅ Download ready in {thread.mention}",
                 color=self.color
             )
             await status_message.edit(content=None, embed=embed_status)
 
         except Exception as e:
-            await status_message.edit(content=f"❌ An error occurred: {str(e)}")
+            await status_message.edit(content=f"❌ Error: {str(e)}")
             if 'thread' in locals():
                 await thread.delete()
 
@@ -254,9 +255,7 @@ class DownloadCog(commands.Cog):
         categories = {}
         for attachment in media_files:
             filename = attachment.filename.lower()
-            # Detect if it's a video or image
             if any(filename.endswith(ext) for ext in ['.mp4', '.mov', '.webm']):
-                # Extract category name (before first dash or underscore or space)
                 category = next((
                     word.strip() for word in re.split(r'[-_\s]', filename)
                     if word.strip() and not any(ext in word for ext in ['.mp4', '.mov', '.webm'])
@@ -280,7 +279,7 @@ class DownloadCog(commands.Cog):
 
         script += "\necho ✅ Download complete!\n"
         script += "echo Files are organized in the MediaDownload folder on your desktop\n"
-        script += "explorer .\n"  # Opens folder at the end
+        script += "explorer .\n"
         script += "pause"
         return script
 
@@ -297,9 +296,7 @@ class DownloadCog(commands.Cog):
         categories = {}
         for attachment in media_files:
             filename = attachment.filename.lower()
-            # Detect if it's a video or image
             if any(filename.endswith(ext) for ext in ['.mp4', '.mov', '.webm']):
-                # Extract category name (before first dash or underscore or space)
                 category = next((
                     word.strip() for word in re.split(r'[-_\s]', filename)
                     if word.strip() and not any(ext in word for ext in ['.mp4', '.mov', '.webm'])
@@ -323,7 +320,7 @@ class DownloadCog(commands.Cog):
 
         script += "\necho '✅ Download complete!'\n"
         script += "echo 'Files are organized in the MediaDownload folder on your desktop'\n"
-        script += "xdg-open . 2>/dev/null || open . 2>/dev/null || explorer.exe . 2>/dev/null"  # Opens folder at the end
+        script += "xdg-open . 2>/dev/null || open . 2>/dev/null || explorer.exe . 2>/dev/null"
         return script
 
     def _is_valid_type(self, filename, type_key):
