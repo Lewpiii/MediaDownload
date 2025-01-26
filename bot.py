@@ -72,20 +72,32 @@ class DownloadCog(commands.Cog):
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="📥 Media Downloader",
-            description="Download media files from any channel",
+            description="Download media files from any Discord channel",
             color=self.color
         )
         
         embed.add_field(
-            name="📌 Commands",
+            name="📌 Available Commands",
             value=(
-                "`/download type:[type] number:[number]`\n"
-                "Download your selected media files\n\n"
-                "**Available types:**\n"
-                "• `images` - Download images\n"
-                "• `videos` - Download videos\n"
+                "**`/download`**\n"
+                "Download media files from the current channel\n"
+                "• `type` - Select media type to download\n"
+                "• `number` - Number of messages to analyze\n\n"
+                "**`/stats`**\n"
+                "View bot statistics (servers, uptime, latency)\n\n"
+                "**`/help`**\n"
+                "Display this help message"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📁 Available Media Types",
+            value=(
+                "• `images` - Download images (.jpg, .jpeg, .png, .webp, etc.)\n"
+                "• `videos` - Download videos (.mp4, .mov, .webm, etc.)\n"
                 "• `gifs` - Download GIFs\n"
-                "• `all` - Download all media"
+                "• `all` - Download all media types"
             ),
             inline=False
         )
@@ -95,12 +107,12 @@ class DownloadCog(commands.Cog):
             value=(
                 "`/download type:images number:50` - Last 50 images\n"
                 "`/download type:videos number:All` - All videos\n"
-                "`/download type:all number:All` - All media files"
+                "`/download type:all number:100` - Last 100 media files"
             ),
             inline=False
         )
         
-        embed.set_footer(text="Bot created by Arthur")
+        embed.set_footer(text="Bot created by Arthur • Use /help for commands")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="download", description="Download media files")
