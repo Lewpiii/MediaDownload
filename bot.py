@@ -33,18 +33,20 @@ class MediaDownload(commands.Bot):
         await self.add_cog(DownloadCog(self))
         print("🔄 Syncing slash commands...")
         try:
-            # Force global sync
-            self.tree.clear_commands(guild=None)
-            await self.tree.sync(guild=None)
-            print("✅ Slash commands synced globally!")
-            
-            # Sync for each server if needed
-            for guild in self.guilds:
-                self.tree.clear_commands(guild=guild)
-                await self.tree.sync(guild=guild)
-                print(f"✅ Commands synced for server: {guild.name}")
+            synced = await self.tree.sync()
+            print(f"✅ {len(synced)} slash commands synced!")
         except Exception as e:
             print(f"❌ Sync error: {e}")
+
+    async def on_ready(self):
+        print(f"✅ Logged in as {self.user}")
+        print(f"🌐 In {len(self.guilds)} servers")
+        await self.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="/help for commands"
+            )
+        )
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
@@ -100,7 +102,7 @@ class DownloadCog(commands.Cog):
 
     @app_commands.command(name="downloadall", description="Download all videos from channel")
     async def download_all_videos(self, interaction: discord.Interaction):
-        await interaction.response.send_message("🔍 Searching for all videos in channel...")
+        await interaction.response.send_message("🔍 Searching for all videos...")
         status_message = await interaction.original_response()
         
         # Collect videos
@@ -434,4 +436,4 @@ async def main():
 
 # Start bot
 import asyncio
-asyncio.run(main()) 
+asyncio.run(main())
