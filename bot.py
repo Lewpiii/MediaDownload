@@ -31,12 +31,20 @@ class MediaDownload(commands.Bot):
 
     async def setup_hook(self):
         await self.add_cog(DownloadCog(self))
-        print("🔄 Syncing slash commands...")
+        print("🔄 Synchronisation des commandes slash...")
         try:
-            synced = await self.tree.sync()
-            print(f"✅ {len(synced)} slash commands synced!")
+            # Forcer la synchronisation globale
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync(guild=None)
+            print("✅ Commandes slash synchronisées globalement !")
+            
+            # Synchroniser pour chaque serveur si nécessaire
+            for guild in self.guilds:
+                self.tree.clear_commands(guild=guild)
+                await self.tree.sync(guild=guild)
+                print(f"✅ Commandes synchronisées pour le serveur : {guild.name}")
         except Exception as e:
-            print(f"❌ Sync error: {e}")
+            print(f"❌ Erreur lors de la synchronisation : {e}")
 
     async def on_ready(self):
         print(f"✅ Logged in as {self.user}")
