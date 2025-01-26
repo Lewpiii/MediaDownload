@@ -12,7 +12,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 if TOKEN is None:
-    raise ValueError("❌ Token Discord non trouvé dans le fichier .env")
+    raise ValueError("❌ Discord Token not found in .env file")
 
 class MediaDownload(commands.Bot):
     def __init__(self):
@@ -20,7 +20,7 @@ class MediaDownload(commands.Bot):
         intents.message_content = True
         super().__init__(command_prefix='/', intents=intents)
         
-        # Types de médias supportés
+        # Supported media types
         self.media_types = {
             '📷 images': ['.jpg', '.jpeg', '.png', '.webp'],
             '🎥 videos': ['.mp4', '.mov', '.webm'],
@@ -31,110 +31,208 @@ class MediaDownload(commands.Bot):
 
     async def setup_hook(self):
         await self.add_cog(DownloadCog(self))
-        print("🔄 Synchronisation des commandes slash...")
+        print("🔄 Syncing slash commands...")
         try:
-            synced = await self.tree.sync()
-            print(f"✅ {len(synced)} commandes slash synchronisées !")
+            # Force global sync
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync(guild=None)
+            print("✅ Slash commands synced globally!")
+            
+            # Sync for each server if needed
+            for guild in self.guilds:
+                self.tree.clear_commands(guild=guild)
+                await self.tree.sync(guild=guild)
+                print(f"✅ Commands synced for server: {guild.name}")
         except Exception as e:
-            print(f"❌ Erreur lors de la synchronisation : {e}")
+            print(f"❌ Sync error: {e}")
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.color = 0x2ecc71  # Vert
+        self.color = 0x2ecc71  # Green
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"✅ {self.bot.user} est prêt !")
+        print(f"✅ {self.bot.user} is ready!")
         await self.bot.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name="/help pour l'aide"
+                name="/help for commands"
             )
         )
 
-    @app_commands.command(name="help", description="Affiche l'aide du bot")
+    @app_commands.command(name="help", description="Shows bot help")
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="📥 Aide MediaDownload",
-            description="Téléchargez facilement les médias d'un canal",
+            title="📥 MediaDownload Help",
+            description="Easily download media from a channel",
             color=self.color
         )
         
         embed.add_field(
-            name="📌 Commandes",
+            name="📌 Commands",
             value=(
-                "`/download type:[type] scope:[nombre ou 'all']`\n"
-                "Télécharge les médias du type spécifié\n\n"
-                "**Types disponibles :**\n"
+                "`/download type:[type] number:[number]`\n"
+                "Download specified media type\n\n"
+                "`/downloadall`\n"
+                "Download all videos from channel\n\n"
+                "**Available types:**\n"
                 "• `images` - Photos\n"
-                "• `videos` - Vidéos\n"
+                "• `videos` - Videos\n"
                 "• `gifs` - GIFs\n"
-                "• `all` - Tous les médias\n\n"
-                "Nombres disponibles :\n"
-                "• 10 - Messages\n"
-                "• 100 - Messages\n"
-                "• 1000... - Messages\n"
-                "• Tous - Tous les messages"
+                "• `all` - All media"
             ),
             inline=False
         )
         
         embed.add_field(
-            name="💡 Exemples",
+            name="💡 Examples",
             value=(
-                "`/download images 50` - 50 dernières images\n"
-                "`/download videos Tous` - Toutes les vidéos\n"
-                "`/download Tous Tous` - Tous les médias de tous les messages disponibles dans le canal"
+                "`/download type:images number:50` - Last 50 images\n"
+                "`/download type:videos number:All` - All videos\n"
+                "`/download type:all number:All` - All media"
             ),
             inline=False
         )
         
-        embed.set_footer(text="Bot créé par Arthur")
+        embed.set_footer(text="Bot created by Arthur")
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="download", description="Télécharge les médias spécifiés")
+    @app_commands.command(name="downloadall", description="Download all videos from channel")
+    async def download_all_videos(self, interaction: discord.Interaction):
+        await interaction.response.send_message("🔍 Searching for all videos in channel...")
+        status_message = await interaction.original_response()
+        
+        # Collect videos
+        media_files = []
+        total_size = 0
+        processed_messages = 0
+        
+        async for message in interaction.channel.history(limit=None):
+            processed_messages += 1
+            if processed_messages % 100 == 0:
+                await status_message.edit(content=f"🔍 Searching... ({processed_messages} messages processed)")
+            
+            for attachment in message.attachments:
+                if any(attachment.filename.lower().endswith(ext) for ext in self.bot.media_types['🎥 videos']):
+                    media_files.append(attachment)
+                    total_size += attachment.size
+
+        if not media_files:
+            await status_message.edit(content="❌ No videos found in this channel.")
+            return
+
+        try:
+            # Create scripts
+            batch_content = self._create_batch_script(media_files)
+            shell_content = self._create_shell_script(media_files)
+
+            # Create thread
+            thread = await interaction.channel.create_thread(
+                name=f"📥 Video Download (all messages, {len(media_files)} files)",
+                type=discord.ChannelType.public_thread
+            )
+
+            # Send information
+            embed = discord.Embed(
+                title="📥 Download Ready!",
+                description="Choose script based on your system:",
+                color=self.color
+            )
+            
+            embed.add_field(
+                name="📊 Summary",
+                value=(
+                    f"• Messages processed: {processed_messages}\n"
+                    f"• Type: 🎥 videos\n"
+                    f"• Files found: {len(media_files)}\n"
+                    f"• Total size: {self._format_size(total_size)}"
+                ),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🪟 Windows",
+                value="1. Download `download.bat`\n2. Double-click it",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="🐧 Linux/Mac",
+                value="1. Download `download.sh`\n2. `chmod +x download.sh`\n3. `./download.sh`",
+                inline=True
+            )
+
+            await thread.send(embed=embed)
+
+            # Send scripts
+            await thread.send(
+                "📦 Download scripts:",
+                files=[
+                    discord.File(io.BytesIO(batch_content.encode()), "download.bat"),
+                    discord.File(io.BytesIO(shell_content.encode()), "download.sh")
+                ]
+            )
+
+            # Update status
+            embed_status = discord.Embed(
+                description=f"✅ Scripts available in {thread.mention}",
+                color=self.color
+            )
+            await status_message.edit(content=None, embed=embed_status)
+
+        except Exception as e:
+            await status_message.edit(content=f"❌ An error occurred: {str(e)}")
+            if 'thread' in locals():
+                await thread.delete()
+
+    @app_commands.command(name="download", description="Download specified media")
     @app_commands.choices(
         type=[
             app_commands.Choice(name="Images", value="images"),
-            app_commands.Choice(name="Vidéos", value="videos"),
+            app_commands.Choice(name="Videos", value="videos"),
             app_commands.Choice(name="GIFs", value="gifs"),
-            app_commands.Choice(name="Tout", value="all")
+            app_commands.Choice(name="All", value="all")
         ],
-        scope=[
-            app_commands.Choice(name="Tout", value="all"),
-            app_commands.Choice(name="10 derniers", value="10"),
-            app_commands.Choice(name="50 derniers", value="50"),
-            app_commands.Choice(name="100 derniers", value="100"),
-            app_commands.Choice(name="500 derniers", value="500")
+        number=[
+            app_commands.Choice(name="All", value="-1"),
+            app_commands.Choice(name="10", value="10"),
+            app_commands.Choice(name="50", value="50"),
+            app_commands.Choice(name="100", value="100"),
+            app_commands.Choice(name="500", value="500"),
+            app_commands.Choice(name="1000", value="1000")
         ]
+    )
+    @app_commands.describe(
+        type="Type of media to download",
+        number="Number of messages to analyze"
     )
     async def download_media(
         self, 
         interaction: discord.Interaction, 
         type: app_commands.Choice[str],
-        scope: app_commands.Choice[str]
+        number: app_commands.Choice[str]
     ):
-        await interaction.response.send_message("🔍 Recherche des médias...")
+        # Convert number value
+        limit = None if number.value == "-1" else int(number.value)
+        
+        await interaction.response.send_message("🔍 Searching for media...")
         status_message = await interaction.original_response()
         
-        # Nettoyer le type de média
+        # Clean media type
         clean_type = type.value
         type_key = f"📷 {clean_type}" if clean_type == 'images' else \
                   f"🎥 {clean_type}" if clean_type == 'videos' else \
                   f"🎞️ {clean_type}" if clean_type == 'gifs' else \
                   f"📁 {clean_type}"
 
-        # Déterminer la limite de messages
-        limit = None if scope.value == "all" else int(scope.value)
-
-        # Message initial
+        # Initial message
         if limit:
-            await status_message.edit(content=f"🔍 Recherche dans les {limit} derniers messages...")
+            await status_message.edit(content=f"🔍 Searching in last {limit} messages...")
         else:
-            await status_message.edit(content="🔍 Recherche dans tous les messages du canal...")
+            await status_message.edit(content="🔍 Searching in all channel messages...")
 
-        # Collecter les médias
+        # Collect media
         media_files = []
         total_size = 0
         processed_messages = 0
@@ -143,7 +241,7 @@ class DownloadCog(commands.Cog):
             async for message in interaction.channel.history(limit=limit):
                 processed_messages += 1
                 if processed_messages % 100 == 0:
-                    await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
+                    await status_message.edit(content=f"🔍 Searching... ({processed_messages} messages processed)")
                 
                 for attachment in message.attachments:
                     if self._is_valid_type(attachment.filename, type_key):
@@ -151,113 +249,113 @@ class DownloadCog(commands.Cog):
                         total_size += attachment.size
 
         if not media_files:
-            await status_message.edit(content=f"❌ Aucun média de type `{clean_type}` trouvé.")
+            await status_message.edit(content=f"❌ No {clean_type} media found.")
             return
 
         try:
-            # Créer les scripts
+            # Create scripts
             batch_content = self._create_batch_script(media_files)
             shell_content = self._create_shell_script(media_files)
 
-            # Créer un thread avec nom approprié
-            thread_name = f"📥 Téléchargement {clean_type}"
+            # Create thread
+            thread_name = f"📥 Download {clean_type}"
             if limit:
-                thread_name += f" ({limit} messages, {len(media_files)} fichiers)"
+                thread_name += f" ({limit} messages, {len(media_files)} files)"
             else:
-                thread_name += f" (tous les messages, {len(media_files)} fichiers)"
+                thread_name += f" (all messages, {len(media_files)} files)"
 
             thread = await interaction.channel.create_thread(
                 name=thread_name,
                 type=discord.ChannelType.public_thread
             )
 
-            # Envoyer les informations
+            # Send information
             embed = discord.Embed(
-                title="📥 Téléchargement prêt !",
-                description="Choisissez le script selon votre système :",
+                title="📥 Download Ready!",
+                description="Choose script based on your system:",
                 color=self.color
             )
             
-            # Description du scope
-            scope_desc = f"• Messages analysés : {processed_messages}\n"
+            # Scope description
+            scope_desc = f"• Messages processed: {processed_messages}\n"
             if limit:
-                scope_desc += f"• Limite : {limit} messages\n"
+                scope_desc += f"• Limit: {limit} messages\n"
             else:
-                scope_desc += "• Scope : Canal entier\n"
+                scope_desc += "• Scope: Entire channel\n"
 
             embed.add_field(
-                name="📊 Résumé",
+                name="📊 Summary",
                 value=(
                     scope_desc +
-                    f"• Type : {type_key}\n"
-                    f"• Fichiers trouvés : {len(media_files)}\n"
-                    f"• Taille totale : {self._format_size(total_size)}"
+                    f"• Type: {type_key}\n"
+                    f"• Files found: {len(media_files)}\n"
+                    f"• Total size: {self._format_size(total_size)}"
                 ),
                 inline=False
             )
             
             embed.add_field(
                 name="🪟 Windows",
-                value="1. Téléchargez `download.bat`\n2. Double-cliquez dessus",
+                value="1. Download `download.bat`\n2. Double-click it",
                 inline=True
             )
             
             embed.add_field(
                 name="🐧 Linux/Mac",
-                value="1. Téléchargez `download.sh`\n2. `chmod +x download.sh`\n3. `./download.sh`",
+                value="1. Download `download.sh`\n2. `chmod +x download.sh`\n3. `./download.sh`",
                 inline=True
             )
 
             await thread.send(embed=embed)
 
-            # Envoyer les scripts
+            # Send scripts
             await thread.send(
-                "📦 Scripts de téléchargement :",
+                "📦 Download scripts:",
                 files=[
                     discord.File(io.BytesIO(batch_content.encode()), "download.bat"),
                     discord.File(io.BytesIO(shell_content.encode()), "download.sh")
                 ]
             )
 
-            # Mettre à jour le statut
+            # Update status
             embed_status = discord.Embed(
-                description=f"✅ Les scripts sont disponibles dans {thread.mention}",
+                description=f"✅ Scripts available in {thread.mention}",
                 color=self.color
             )
             await status_message.edit(content=None, embed=embed_status)
 
         except Exception as e:
-            await status_message.edit(content=f"❌ Une erreur est survenue : {str(e)}")
+            await status_message.edit(content=f"❌ An error occurred: {str(e)}")
             if 'thread' in locals():
                 await thread.delete()
 
     def _create_batch_script(self, media_files):
-        """Crée le script batch Windows avec organisation automatique"""
+        """Creates Windows batch script with automatic organization"""
         script = "@echo off\n"
-        script += "echo 📥 Téléchargement et organisation des fichiers...\n"
+        script += "echo 📥 Downloading and organizing files...\n"
         script += "cd %USERPROFILE%\\Desktop\n"
         script += "mkdir MediaDownload 2>nul\n"
         script += "cd MediaDownload\n"
         script += "mkdir Videos 2>nul\n"
         script += "mkdir Images 2>nul\n\n"
 
-        # Grouper les fichiers par catégorie
+        # Group files by category
         categories = {}
         for attachment in media_files:
             filename = attachment.filename.lower()
-            # Détecter si c'est une vidéo ou une image
+            # Detect if it's a video or image
             if any(filename.endswith(ext) for ext in ['.mp4', '.mov', '.webm']):
-                # Extraire le nom de la catégorie (avant le premier tiret ou underscore ou espace)
+                # Extract category name (before first dash or underscore or space)
                 category = next((
                     word.strip() for word in re.split(r'[-_\s]', filename)
                     if word.strip() and not any(ext in word for ext in ['.mp4', '.mov', '.webm'])
-                ), 'autres')
+                ), 'others')
                 
                 if category not in categories:
                     categories[category] = []
                 categories[category].append(attachment)
 
-        # Créer les dossiers et télécharger les fichiers
+        # Create folders and download files
         total_files = len(media_files)
         current_file = 0
 
@@ -269,38 +367,38 @@ class DownloadCog(commands.Cog):
                 script += f'echo [{current_file}/{total_files}] {safe_filename}\n'
                 script += f'curl -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
 
-        script += "\necho ✅ Téléchargement terminé !\n"
-        script += "echo Les fichiers sont organisés dans le dossier MediaDownload sur votre bureau\n"
-        script += "explorer .\n"  # Ouvre le dossier à la fin
+        script += "\necho ✅ Download complete!\n"
+        script += "echo Files are organized in the MediaDownload folder on your desktop\n"
+        script += "explorer .\n"  # Opens folder at the end
         script += "pause"
         return script
 
     def _create_shell_script(self, media_files):
-        """Crée le script shell Linux/Mac avec organisation automatique"""
+        """Creates Linux/Mac shell script with automatic organization"""
         script = "#!/bin/bash\n"
-        script += "echo '📥 Téléchargement et organisation des fichiers...'\n"
+        script += "echo '📥 Downloading and organizing files...'\n"
         script += "cd ~/Desktop\n"
         script += "mkdir -p MediaDownload\n"
         script += "cd MediaDownload\n"
         script += "mkdir -p Videos Images\n\n"
 
-        # Grouper les fichiers par catégorie
+        # Group files by category
         categories = {}
         for attachment in media_files:
             filename = attachment.filename.lower()
-            # Détecter si c'est une vidéo ou une image
+            # Detect if it's a video or image
             if any(filename.endswith(ext) for ext in ['.mp4', '.mov', '.webm']):
-                # Extraire le nom de la catégorie (avant le premier tiret ou underscore ou espace)
+                # Extract category name (before first dash or underscore or space)
                 category = next((
                     word.strip() for word in re.split(r'[-_\s]', filename)
                     if word.strip() and not any(ext in word for ext in ['.mp4', '.mov', '.webm'])
-                ), 'autres')
+                ), 'others')
                 
                 if category not in categories:
                     categories[category] = []
                 categories[category].append(attachment)
 
-        # Créer les dossiers et télécharger les fichiers
+        # Create folders and download files
         total_files = len(media_files)
         current_file = 0
 
@@ -312,18 +410,18 @@ class DownloadCog(commands.Cog):
                 script += f'echo "[{current_file}/{total_files}] {safe_filename}"\n'
                 script += f'curl -L -o "Videos/{category}/{safe_filename}" "{attachment.url}"\n'
 
-        script += "\necho '✅ Téléchargement terminé !'\n"
-        script += "echo 'Les fichiers sont organisés dans le dossier MediaDownload sur votre bureau'\n"
-        script += "xdg-open . 2>/dev/null || open . 2>/dev/null || explorer.exe . 2>/dev/null"  # Ouvre le dossier à la fin
+        script += "\necho '✅ Download complete!'\n"
+        script += "echo 'Files are organized in the MediaDownload folder on your desktop'\n"
+        script += "xdg-open . 2>/dev/null || open . 2>/dev/null || explorer.exe . 2>/dev/null"  # Opens folder at the end
         return script
 
     def _is_valid_type(self, filename, type_key):
-        """Vérifie si le fichier correspond au type demandé"""
+        """Checks if file matches requested type"""
         ext = os.path.splitext(filename.lower())[1]
         return ext in self.bot.media_types[type_key]
 
     def _format_size(self, size_bytes):
-        """Formate la taille en format lisible"""
+        """Formats size in readable format"""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size_bytes < 1024:
                 return f"{size_bytes:.2f} {unit}"
@@ -334,6 +432,6 @@ async def main():
     async with MediaDownload() as bot:
         await bot.start(TOKEN)
 
-# Lancer le bot
+# Start bot
 import asyncio
-asyncio.run(main())
+asyncio.run(main()) 
