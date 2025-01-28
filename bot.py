@@ -439,7 +439,7 @@ class VideoDownloader(commands.Cog):
 
     @commands.command(name='dlvideo', aliases=['dlv', 'vdl'])
     async def dlvideo(self, ctx, url: str):
-        """Download videos from various platforms"""
+        """Download videos from social media platforms"""
         processing_msg = await ctx.send("⏳ Processing your request...")
 
         try:
