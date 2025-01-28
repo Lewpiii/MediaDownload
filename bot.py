@@ -110,7 +110,7 @@ class DownloadCog(commands.Cog):
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="📥 Media Downloader",
-            description="A simple bot to download media files from Discord channels and online platforms",
+            description="A simple bot to download media files from Discord channels and online platforms\n",
             color=self.color
         )
         
@@ -125,7 +125,7 @@ class DownloadCog(commands.Cog):
                 "Download videos from YouTube, TikTok, Instagram, etc.\n"
                 "• Usage: `/urldl [url]`\n\n"
                 "**`/stats`**\n"
-                "View bot statistics"
+                "View bot statistics\n"
             ),
             inline=False
         )
@@ -136,7 +136,7 @@ class DownloadCog(commands.Cog):
                 "• `📷 Images` - .jpg, .jpeg, .png, .webp\n"
                 "• `🎥 Videos` - .mp4, .mov, .webm\n"
                 "• `🎞️ GIFs` - .gif\n"
-                "• `📁 All` - All supported formats"
+                "• `📁 All` - All supported formats\n"
             ),
             inline=False
         )
@@ -149,7 +149,7 @@ class DownloadCog(commands.Cog):
                 "• `/download type:videos number:All` - Download all videos\n\n"
                 "**Online Video Download:**\n"
                 "• `/urldl https://youtube.com/...` - Download YouTube video\n"
-                "• `/urldl https://tiktok.com/...` - Download TikTok video"
+                "• `/urldl https://tiktok.com/...` - Download TikTok video\n"
             ),
             inline=False
         )
