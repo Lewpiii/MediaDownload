@@ -50,8 +50,7 @@ class MediaDownload(commands.Bot):
     async def setup_hook(self):
         try:
             await self.add_cog(DownloadCog(self))
-            await self.add_cog(VideoDownloader(self))
-            print("✅ DownloadCog and VideoDownloader chargés avec succès!")
+            print("✅ DownloadCog chargé avec succès!")
             
             # Synchronisation des commandes
             await self.tree.sync()
@@ -416,48 +415,6 @@ class DownloadCog(commands.Cog):
         )
         
         await interaction.response.send_message(embed=embed)
-
-class VideoDownloader(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    @app_commands.command(name="urldl", description="Download videos from YouTube")
-    async def urldl(self, interaction: discord.Interaction, url: str):
-        await interaction.response.defer()
-        processing_msg = await interaction.followup.send("⏳ Processing your request...")
-
-        try:
-            # Check if server is premium for 50MB limit
-            max_size = 50 if interaction.guild.premium_tier >= 2 else 8
-
-            if not os.path.exists('downloads'):
-                os.makedirs('downloads')
-
-            # Download video using pytube
-            yt = YouTube(url)
-            video = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-            
-            # Check file size (in MB)
-            file_size = video.filesize / (1024 * 1024)
-            
-            if file_size > max_size:
-                embed = discord.Embed(
-                    title="📥 Video Download Link",
-                    description=f"Video was too large ({file_size:.1f}MB). Here's the direct download link:",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(name="Title", value=yt.title)
-                embed.add_field(name="Duration", value=f"{yt.length // 60}:{yt.length % 60:02d}")
-                await processing_msg.edit(content=None, embed=embed)
-                await interaction.followup.send(video.url)
-            else:
-                # Download and send the video
-                video_path = video.download('downloads')
-                await interaction.followup.send(file=discord.File(video_path))
-                os.remove(video_path)
-
-        except Exception as e:
-            await processing_msg.edit(content=f"❌ An error occurred: {str(e)}")
 
 async def main():
     bot = MediaDownload()
