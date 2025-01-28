@@ -7,7 +7,6 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import random
-from pytube import YouTube
 
 # Configuration
 load_dotenv()
