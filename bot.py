@@ -145,7 +145,6 @@ class DownloadCog(commands.Cog):
                 "**Discord Media Download:**\n"
                 "• `/download type:images number:50` - Download last 50 images\n"
                 "• `/download type:videos number:All` - Download all videos\n"
-                "━━━━━━━━━━━━━━━━━━━━━━"
             ),
             inline=False
         )
