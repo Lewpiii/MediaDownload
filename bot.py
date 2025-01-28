@@ -123,9 +123,9 @@ class DownloadCog(commands.Cog):
                 "• `number` - Number of messages to analyze\n\n"
                 "**`/urldl`**\n"
                 "Download videos from YouTube, TikTok, Instagram, etc.\n"
-                "Usage: `/urldl [url]`\n\n"
+                "• Usage: `/urldl [url]`\n\n"
                 "**`/stats`**\n"
-                "View bot statistics\n"
+                "View bot statistics"
             ),
             inline=False
         )
@@ -145,11 +145,11 @@ class DownloadCog(commands.Cog):
             name="💡 Examples",
             value=(
                 "**Discord Media Download:**\n"
-                "`/download type:images number:50` - Download last 50 images\n"
-                "`/download type:videos number:All` - Download all videos\n\n"
+                "• `/download type:images number:50` - Download last 50 images\n"
+                "• `/download type:videos number:All` - Download all videos\n\n"
                 "**Online Video Download:**\n"
-                "`/urldl https://youtube.com/...` - Download YouTube video\n"
-                "`/urldl https://tiktok.com/...` - Download TikTok video"
+                "• `/urldl https://youtube.com/...` - Download YouTube video\n"
+                "• `/urldl https://tiktok.com/...` - Download TikTok video"
             ),
             inline=False
         )
