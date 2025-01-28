@@ -150,16 +150,6 @@ class DownloadCog(commands.Cog):
             inline=False
         )
         
-        embed.add_field(
-            name="ℹ️ Video Size Limits",
-            value=(
-                "• Regular servers: Up to 8MB\n"
-                "• Premium servers: Up to 50MB\n"
-                "• Larger videos: Direct download link provided"
-            ),
-            inline=False
-        )
-        
         embed.set_footer(text="Bot created by Arthur • Use /help for commands")
         await interaction.response.send_message(embed=embed)
 
