@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import random
+import yt_dlp
 
 # Configuration
 load_dotenv()
@@ -50,7 +51,8 @@ class MediaDownload(commands.Bot):
     async def setup_hook(self):
         try:
             await self.add_cog(DownloadCog(self))
-            print("✅ DownloadCog chargé avec succès!")
+            await self.add_cog(VideoDownloader(self))
+            print("✅ DownloadCog and VideoDownloader chargés avec succès!")
             
             # Synchronisation des commandes
             await self.tree.sync()
@@ -145,6 +147,15 @@ class DownloadCog(commands.Cog):
                 "`/download type:videos number:All` - All videos\n"
                 "`/download type:all number:100` - Last 100 media files"
             ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📥 /download [url] (or /dl)",
+            value="Download videos from various platforms (YouTube, TikTok, Instagram, etc.)\n"
+                  "• For videos under 8MB (or 50MB in premium servers): Sends the video directly\n"
+                  "• For larger videos: Provides a direct download link\n"
+                  "Example: `/download https://youtube.com/...`",
             inline=False
         )
         
@@ -415,6 +426,59 @@ class DownloadCog(commands.Cog):
         )
         
         await interaction.response.send_message(embed=embed)
+
+class VideoDownloader(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.ydl_opts = {
+            'format': 'best',
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'quiet': True,
+            'no_warnings': True,
+        }
+
+    @commands.command(name='download', aliases=['dl'])
+    async def download_video(self, ctx, url: str):
+        """Download videos from various platforms"""
+        processing_msg = await ctx.send("⏳ Processing your request...")
+
+        try:
+            # Check if server is premium for 50MB limit
+            max_size = 50 if ctx.guild.premium_tier >= 2 else 8
+
+            if not os.path.exists('downloads'):
+                os.makedirs('downloads')
+
+            async with ctx.typing():
+                with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+                    # First get info without downloading
+                    info = ydl.extract_info(url, download=False)
+                    
+                    # Check file size (in MB)
+                    file_size = info.get('filesize', 0) / (1024 * 1024)
+                    
+                    if file_size > max_size:
+                        # If file is too large, send direct download link
+                        direct_url = info.get('url')
+                        if direct_url:
+                            embed = discord.Embed(
+                                title="📥 Video Download Link",
+                                description=f"Video was too large ({file_size:.1f}MB). Here's the direct download link:",
+                                color=discord.Color.blue()
+                            )
+                            embed.add_field(name="Title", value=info.get('title', 'Unknown'))
+                            embed.add_field(name="Duration", value=f"{info.get('duration', 0) // 60}:{info.get('duration', 0) % 60:02d}")
+                            await processing_msg.edit(content=None, embed=embed)
+                            await ctx.send(direct_url)
+                    else:
+                        # If file is small enough, download and send it
+                        info = ydl.extract_info(url, download=True)
+                        video_path = ydl.prepare_filename(info)
+                        await ctx.send(file=discord.File(video_path))
+                        os.remove(video_path)
+
+        except Exception as e:
+            await processing_msg.edit(content=f"❌ An error occurred: {str(e)}")
 
 async def main():
     bot = MediaDownload()
