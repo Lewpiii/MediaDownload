@@ -110,32 +110,33 @@ class DownloadCog(commands.Cog):
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="📥 Media Downloader",
-            description="Download media files from any Discord channel",
+            description="A simple bot to download media files from Discord channels and online platforms",
             color=self.color
         )
         
         embed.add_field(
-            name="📌 Available Commands",
+            name="📥 Main Commands",
             value=(
                 "**`/download`**\n"
-                "Download media files from the current channel\n"
-                "• `type` - Select media type to download\n"
+                "Download media files from the current Discord channel\n"
+                "• `type` - Select media type (images, videos, gifs, all)\n"
                 "• `number` - Number of messages to analyze\n\n"
+                "**`/urldl`**\n"
+                "Download videos from YouTube, TikTok, Instagram, etc.\n"
+                "Usage: `/urldl [url]`\n\n"
                 "**`/stats`**\n"
-                "View bot statistics (servers, uptime, latency)\n\n"
-                "**`/help`**\n"
-                "Display this help message"
+                "View bot statistics\n"
             ),
             inline=False
         )
         
         embed.add_field(
-            name="📁 Available Media Types",
+            name="📁 Media Types for /download",
             value=(
-                "• `images` - Download images (.jpg, .jpeg, .png, .webp, etc.)\n"
-                "• `videos` - Download videos (.mp4, .mov, .webm, etc.)\n"
-                "• `gifs` - Download GIFs\n"
-                "• `all` - Download all media types"
+                "• `📷 Images` - .jpg, .jpeg, .png, .webp\n"
+                "• `🎥 Videos` - .mp4, .mov, .webm\n"
+                "• `🎞️ GIFs` - .gif\n"
+                "• `📁 All` - All supported formats"
             ),
             inline=False
         )
@@ -143,19 +144,23 @@ class DownloadCog(commands.Cog):
         embed.add_field(
             name="💡 Examples",
             value=(
-                "`/download type:images number:50` - Last 50 images\n"
-                "`/download type:videos number:All` - All videos\n"
-                "`/download type:all number:100` - Last 100 media files"
+                "**Discord Media Download:**\n"
+                "`/download type:images number:50` - Download last 50 images\n"
+                "`/download type:videos number:All` - Download all videos\n\n"
+                "**Online Video Download:**\n"
+                "`/urldl https://youtube.com/...` - Download YouTube video\n"
+                "`/urldl https://tiktok.com/...` - Download TikTok video"
             ),
             inline=False
         )
         
         embed.add_field(
-            name="📥 /download [url] (or /dl)",
-            value="Download videos from various platforms (YouTube, TikTok, Instagram, etc.)\n"
-                  "• For videos under 8MB (or 50MB in premium servers): Sends the video directly\n"
-                  "• For larger videos: Provides a direct download link\n"
-                  "Example: `/download https://youtube.com/...`",
+            name="ℹ️ Video Size Limits",
+            value=(
+                "• Regular servers: Up to 8MB\n"
+                "• Premium servers: Up to 50MB\n"
+                "• Larger videos: Direct download link provided"
+            ),
             inline=False
         )
         
@@ -437,45 +442,44 @@ class VideoDownloader(commands.Cog):
             'no_warnings': True,
         }
 
-    @commands.command(name='dlvideo', aliases=['dlv', 'vdl'])
-    async def dlvideo(self, ctx, url: str):
-        """Download videos from social media platforms"""
-        processing_msg = await ctx.send("⏳ Processing your request...")
+    @app_commands.command(name="urldl", description="Download videos from YouTube, TikTok, Instagram, etc.")
+    async def urldl(self, interaction: discord.Interaction, url: str):
+        await interaction.response.defer()
+        processing_msg = await interaction.followup.send("⏳ Processing your request...")
 
         try:
             # Check if server is premium for 50MB limit
-            max_size = 50 if ctx.guild.premium_tier >= 2 else 8
+            max_size = 50 if interaction.guild.premium_tier >= 2 else 8
 
             if not os.path.exists('downloads'):
                 os.makedirs('downloads')
 
-            async with ctx.typing():
-                with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
-                    # First get info without downloading
-                    info = ydl.extract_info(url, download=False)
-                    
-                    # Check file size (in MB)
-                    file_size = info.get('filesize', 0) / (1024 * 1024)
-                    
-                    if file_size > max_size:
-                        # If file is too large, send direct download link
-                        direct_url = info.get('url')
-                        if direct_url:
-                            embed = discord.Embed(
-                                title="📥 Video Download Link",
-                                description=f"Video was too large ({file_size:.1f}MB). Here's the direct download link:",
-                                color=discord.Color.blue()
-                            )
-                            embed.add_field(name="Title", value=info.get('title', 'Unknown'))
-                            embed.add_field(name="Duration", value=f"{info.get('duration', 0) // 60}:{info.get('duration', 0) % 60:02d}")
-                            await processing_msg.edit(content=None, embed=embed)
-                            await ctx.send(direct_url)
-                    else:
-                        # If file is small enough, download and send it
-                        info = ydl.extract_info(url, download=True)
-                        video_path = ydl.prepare_filename(info)
-                        await ctx.send(file=discord.File(video_path))
-                        os.remove(video_path)
+            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+                # First get info without downloading
+                info = ydl.extract_info(url, download=False)
+                
+                # Check file size (in MB)
+                file_size = info.get('filesize', 0) / (1024 * 1024)
+                
+                if file_size > max_size:
+                    # If file is too large, send direct download link
+                    direct_url = info.get('url')
+                    if direct_url:
+                        embed = discord.Embed(
+                            title="📥 Video Download Link",
+                            description=f"Video was too large ({file_size:.1f}MB). Here's the direct download link:",
+                            color=discord.Color.blue()
+                        )
+                        embed.add_field(name="Title", value=info.get('title', 'Unknown'))
+                        embed.add_field(name="Duration", value=f"{info.get('duration', 0) // 60}:{info.get('duration', 0) % 60:02d}")
+                        await processing_msg.edit(content=None, embed=embed)
+                        await interaction.followup.send(direct_url)
+                else:
+                    # If file is small enough, download and send it
+                    info = ydl.extract_info(url, download=True)
+                    video_path = ydl.prepare_filename(info)
+                    await interaction.followup.send(file=discord.File(video_path))
+                    os.remove(video_path)
 
         except Exception as e:
             await processing_msg.edit(content=f"❌ An error occurred: {str(e)}")
