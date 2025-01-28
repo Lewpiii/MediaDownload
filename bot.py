@@ -110,7 +110,7 @@ class DownloadCog(commands.Cog):
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="📥 Media Downloader",
-            description="A simple bot to download media files from Discord channels and online platforms\n",
+            description="A simple bot to download media files from Discord channels and online platforms\n━━━━━━━━━━━━━━━━━━━━━━",
             color=self.color
         )
         
@@ -126,6 +126,7 @@ class DownloadCog(commands.Cog):
                 "• Usage: `/urldl [url]`\n\n"
                 "**`/stats`**\n"
                 "View bot statistics\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
             ),
             inline=False
         )
@@ -137,6 +138,7 @@ class DownloadCog(commands.Cog):
                 "• `🎥 Videos` - .mp4, .mov, .webm\n"
                 "• `🎞️ GIFs` - .gif\n"
                 "• `📁 All` - All supported formats\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
             ),
             inline=False
         )
@@ -150,6 +152,7 @@ class DownloadCog(commands.Cog):
                 "**Online Video Download:**\n"
                 "• `/urldl https://youtube.com/...` - Download YouTube video\n"
                 "• `/urldl https://tiktok.com/...` - Download TikTok video\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
             ),
             inline=False
         )
@@ -440,6 +443,16 @@ class VideoDownloader(commands.Cog):
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'quiet': True,
             'no_warnings': True,
+            'cookiesfrombrowser': ('chrome',),  # Utilise les cookies de Chrome
+            'extract_flat': True,
+            'ignoreerrors': True,
+            'no_check_certificate': True,
+            'nocheckcertificate': True,
+            'extractor_args': {'youtube': {'skip': ['dash', 'hls']}},
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
         }
 
     @app_commands.command(name="urldl", description="Download videos from YouTube, TikTok, Instagram, etc.")
