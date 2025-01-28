@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import random
-import yt_dlp
+from pytube import YouTube
 
 # Configuration
 load_dotenv()
@@ -438,79 +438,41 @@ class DownloadCog(commands.Cog):
 class VideoDownloader(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.ydl_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'quiet': True,
-            'no_warnings': True,
-            'ignoreerrors': True,
-            'no_check_certificate': True,
-            'nocheckcertificate': True,
-            'noplaylist': True,
-            'extract_flat': False,
-            'youtube_include_dash_manifest': False,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'skip': ['dash', 'hls'],
-                    'player_skip': ['js', 'configs', 'webpage']
-                }
-            },
-            'postprocessors': [{
-                'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4',
-            }],
-            'socket_timeout': 10,
-            'nocheckcertificate': True,
-            'legacy_server_connect': True
-        }
 
-    @app_commands.command(name="urldl", description="Download videos from YouTube, TikTok, Instagram, etc.")
+    @app_commands.command(name="urldl", description="Download videos from YouTube")
     async def urldl(self, interaction: discord.Interaction, url: str):
         await interaction.response.defer()
         processing_msg = await interaction.followup.send("⏳ Processing your request...")
 
         try:
-            import ssl
-            ssl._create_default_https_context = ssl._create_unverified_context
-            
             # Check if server is premium for 50MB limit
             max_size = 50 if interaction.guild.premium_tier >= 2 else 8
 
             if not os.path.exists('downloads'):
                 os.makedirs('downloads')
 
-            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
-                # First get info without downloading
-                info = ydl.extract_info(url, download=False)
-                
-                # Check file size (in MB)
-                file_size = info.get('filesize', 0) / (1024 * 1024)
-                
-                if file_size > max_size:
-                    # If file is too large, send direct download link
-                    direct_url = info.get('url')
-                    if direct_url:
-                        embed = discord.Embed(
-                            title="📥 Video Download Link",
-                            description=f"Video was too large ({file_size:.1f}MB). Here's the direct download link:",
-                            color=discord.Color.blue()
-                        )
-                        embed.add_field(name="Title", value=info.get('title', 'Unknown'))
-                        embed.add_field(name="Duration", value=f"{info.get('duration', 0) // 60}:{info.get('duration', 0) % 60:02d}")
-                        await processing_msg.edit(content=None, embed=embed)
-                        await interaction.followup.send(direct_url)
-                else:
-                    # If file is small enough, download and send it
-                    info = ydl.extract_info(url, download=True)
-                    video_path = ydl.prepare_filename(info)
-                    await interaction.followup.send(file=discord.File(video_path))
-                    os.remove(video_path)
+            # Download video using pytube
+            yt = YouTube(url)
+            video = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+            
+            # Check file size (in MB)
+            file_size = video.filesize / (1024 * 1024)
+            
+            if file_size > max_size:
+                embed = discord.Embed(
+                    title="📥 Video Download Link",
+                    description=f"Video was too large ({file_size:.1f}MB). Here's the direct download link:",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="Title", value=yt.title)
+                embed.add_field(name="Duration", value=f"{yt.length // 60}:{yt.length % 60:02d}")
+                await processing_msg.edit(content=None, embed=embed)
+                await interaction.followup.send(video.url)
+            else:
+                # Download and send the video
+                video_path = video.download('downloads')
+                await interaction.followup.send(file=discord.File(video_path))
+                os.remove(video_path)
 
         except Exception as e:
             await processing_msg.edit(content=f"❌ An error occurred: {str(e)}")
