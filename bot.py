@@ -443,12 +443,15 @@ class VideoDownloader(commands.Cog):
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'quiet': True,
             'no_warnings': True,
-            'cookiesfrombrowser': ('chrome',),  # Utilise les cookies de Chrome
             'extract_flat': True,
             'ignoreerrors': True,
             'no_check_certificate': True,
             'nocheckcertificate': True,
-            'extractor_args': {'youtube': {'skip': ['dash', 'hls']}},
+            'extractor_args': {
+                'youtube': {
+                    'skip': ['dash', 'hls']
+                }
+            },
             'postprocessors': [{
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
