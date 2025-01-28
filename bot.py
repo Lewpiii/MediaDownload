@@ -6,6 +6,7 @@ import io
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+import random
 
 # Configuration
 load_dotenv()
@@ -13,6 +14,21 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 if TOKEN is None:
     raise ValueError("❌ Discord Token not found in .env file")
+
+# List of random English responses to add
+RANDOM_RESPONSES = [
+    "Poop! 💩",
+    "Fart! 💨",
+    "Peepee! 🚽",
+    "Poopoo! 💩",
+    "Making bubbles in my bath! 🛁",
+    "Did someone talk about me? *blushes* 😳",
+    "Did someone call? 👀",
+    "HONK HONK! 🤡",
+    "Oops, I've been spotted! 🙈",
+    "Hehehe! 😏",
+    "Silly human! 🤪"
+]
 
 class MediaDownload(commands.Bot):
     def __init__(self):
@@ -51,6 +67,26 @@ class MediaDownload(commands.Bot):
                 name="/help for commands"
             )
         )
+
+    async def on_message(self, message):
+        # Prevent bot from responding to itself
+        if message.author == self.user:
+            return
+
+        # Convert message to lowercase for easier detection
+        content = message.content.lower()
+        
+        # List of possible variations
+        triggers = ['media download', 'mediadownload', 'media-download']
+        
+        # Check if any variation is in the message
+        if any(trigger in content for trigger in triggers):
+            # Choose a random response
+            response = random.choice(RANDOM_RESPONSES)
+            await message.channel.send(response)
+
+        # Don't forget this line if you have commands in your bot
+        await self.process_commands(message)
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
