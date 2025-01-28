@@ -465,6 +465,9 @@ class VideoDownloader(commands.Cog):
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
             }],
+            'socket_timeout': 10,
+            'nocheckcertificate': True,
+            'legacy_server_connect': True
         }
 
     @app_commands.command(name="urldl", description="Download videos from YouTube, TikTok, Instagram, etc.")
@@ -473,6 +476,9 @@ class VideoDownloader(commands.Cog):
         processing_msg = await interaction.followup.send("⏳ Processing your request...")
 
         try:
+            import ssl
+            ssl._create_default_https_context = ssl._create_unverified_context
+            
             # Check if server is premium for 50MB limit
             max_size = 50 if interaction.guild.premium_tier >= 2 else 8
 
