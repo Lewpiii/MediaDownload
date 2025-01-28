@@ -437,8 +437,8 @@ class VideoDownloader(commands.Cog):
             'no_warnings': True,
         }
 
-    @commands.command(name='download', aliases=['dl'])
-    async def download_video(self, ctx, url: str):
+    @commands.command(name='dlvideo', aliases=['dlv', 'vdl'])
+    async def dlvideo(self, ctx, url: str):
         """Download videos from various platforms"""
         processing_msg = await ctx.send("⏳ Processing your request...")
 
