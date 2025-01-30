@@ -56,8 +56,8 @@ This bot gets the job done quickly and efficiently. With **Media Download**, you
 
 ## 📜 Legal Information
 
-- [Terms of Service](https://github.com/votre-utilisateur/nom-du-repertoire/blob/main/TermsOfService.md)
-- [Privacy Policy](https://github.com/votre-utilisateur/nom-du-repertoire/blob/main/PrivacyPolicy.md)
+- [Terms of Service](https://lewpiii.github.io/MediaDownload/blob/main/TermsOfService.md)
+- [Privacy Policy](https://lewpiii.github.io/MediaDownload/blob/main/main/PrivacyPolicy.md)
 
 ---
 
