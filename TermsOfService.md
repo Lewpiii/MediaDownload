@@ -3,7 +3,7 @@
 **Effective Date: 30/01/2025**
 
 Welcome to Media Download ("the Bot"). By using the Bot, you agree to these Terms of Service. If you do not agree, please do not use the Bot.
-
+https://github.com/Lewpiii/MediaDownload/TermsOfService.md
 ---
 
 ## 1. Use of the Bot
@@ -20,7 +20,7 @@ The developer does not guarantee continuous availability or error-free performan
 ---
 
 ## 3. Data Collection & Privacy
-The Bot does not collect, store, or share any personal user data. For more details, please refer to our [Privacy Policy](privacy.html).
+The Bot does not collect, store, or share any personal user data. For more details, please refer to our [Privacy Policy](PrivacyPolicy.html).
 
 ---
 
