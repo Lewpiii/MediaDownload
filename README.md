@@ -65,9 +65,7 @@ This bot gets the job done quickly and efficiently. With **Media Download**, you
 
 Make your Discord media archiving smarter, faster, and easier!
 
-👉 **[Invite Media Download to Your Server](#)**  
-Check out its profile on **[Discord Bot List](#)**.
-
+👉 **[Invite Media Download to Your Server](https://discord.com/oauth2/authorize?client_id=1332684877551763529&permissions=947040413760&integration_type=0&scope=bot+applications.commands)**  
 ---
 
 Start preserving what matters most with **Media Download** — your ultimate tool for saving and archiving Discord media! 🚀
