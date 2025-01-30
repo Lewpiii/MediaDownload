@@ -12,6 +12,11 @@ import random
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
+# Debug pour Render
+print("Variables d'environnement disponibles:")
+print(os.environ.keys())
+print(f"Token présent: {'Oui' if TOKEN else 'Non'}")
+
 if TOKEN is None:
     raise ValueError("❌ Discord Token not found in .env file")
 
