@@ -56,8 +56,8 @@ This bot gets the job done quickly and efficiently. With **Media Download**, you
 
 ## 📜 Legal Information
 
-- [Terms of Service](termsOfService.html)
-- [Privacy Policy](privacyPolicy.html)
+- [Terms of Service](TermsOfService.html)
+- [Privacy Policy](PrivacyPolicy.html)
 
 ---
 
