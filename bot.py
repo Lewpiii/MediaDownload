@@ -12,13 +12,15 @@ import random
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-# Debug pour Render
-print("Variables d'environnement disponibles:")
-print(os.environ.keys())
-print(f"Token présent: {'Oui' if TOKEN else 'Non'}")
+# Debug amélioré
+print("=== Debug Discord Bot ===")
+print(f"Token exists: {'Yes' if TOKEN else 'No'}")
+print(f"Token length: {len(TOKEN) if TOKEN else 0}")
+print(f"Token first 5 chars: {TOKEN[:5] if TOKEN else 'None'}")
+print("=======================")
 
-if TOKEN is None:
-    raise ValueError("❌ Discord Token not found in .env file")
+if not TOKEN:
+    raise ValueError("❌ Discord Token not found!")
 
 # List of random English responses to add
 RANDOM_RESPONSES = [
@@ -422,10 +424,17 @@ class DownloadCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
 async def main():
-    bot = MediaDownload()
-    bot.start_time = datetime.now()
-    async with bot:
-        await bot.start(TOKEN)
+    try:
+        bot = MediaDownload()
+        bot.start_time = datetime.now()
+        async with bot:
+            print("🚀 Starting bot...")
+            await bot.start(TOKEN)
+    except discord.errors.LoginFailure as e:
+        print(f"❌ Login Failed: {str(e)}")
+        print("⚠️ Please check if your token is valid")
+    except Exception as e:
+        print(f"❌ Unexpected error: {str(e)}")
 
 # Start bot
 import asyncio
