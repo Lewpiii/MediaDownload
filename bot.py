@@ -37,6 +37,12 @@ RANDOM_RESPONSES = [
     "Silly human! 🤪"
 ]
 
+class TenorAttachment:
+    def __init__(self, url, filename, size=0):
+        self.url = url
+        self.filename = filename
+        self.size = size
+
 class MediaDownload(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -222,10 +228,26 @@ class DownloadCog(commands.Cog):
                     if processed_messages % 100 == 0:
                         await status_message.edit(content=f"🔍 Searching... ({processed_messages} messages processed)")
                     
+                    # Vérifier les pièces jointes classiques
                     for attachment in message.attachments:
                         if self._is_valid_type(attachment.filename, type_key):
                             media_files.append(attachment)
                             total_size += attachment.size
+                    
+                    # Ajouter la vérification des embeds (pour Tenor et autres)
+                    for embed in message.embeds:
+                        # Vérifier si c'est un GIF de Tenor
+                        if type_key == '🎞️ gifs' and embed.type == 'image' and (
+                            'tenor.com' in embed.url or 
+                            embed.url.lower().endswith('.gif')
+                        ):
+                            # Créer un faux "attachment" pour la cohérence
+                            tenor_gif = TenorAttachment(
+                                url=embed.url,
+                                filename=f"tenor_gif_{len(media_files)}.gif",
+                                size=0  # La taille n'est pas disponible pour les embeds
+                            )
+                            media_files.append(tenor_gif)
 
             if not media_files:
                 await status_message.edit(content=f"❌ No {type_key} found in this channel.")
