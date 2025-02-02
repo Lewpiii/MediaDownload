@@ -45,7 +45,7 @@ class MediaDownload(commands.Bot):
         intents.messages = True
         super().__init__(command_prefix='!', intents=intents)
         
-        # Supported media types
+        # Correction des clés pour les types de médias
         self.media_types = {
             '📷 images': ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'],
             '🎥 videos': ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv'],
@@ -180,6 +180,20 @@ class DownloadCog(commands.Cog):
         number="Number of messages to analyze"
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[str]):
+        # Ajout de debug pour vérifier le type sélectionné
+        print(f"Type sélectionné: {type.value}")
+        
+        # Correction de la conversion du type
+        type_key = {
+            'images': '📷 images',
+            'videos': '🎥 videos',
+            'gifs': '🎞️ gifs',
+            'all': '📁 all'
+        }.get(type.value)
+        
+        print(f"Type key utilisé: {type_key}")  # Debug
+        print(f"Extensions valides: {self.media_types[type_key]}")  # Debug
+
         if not interaction.channel.permissions_for(interaction.guild.me).create_public_threads:
             await interaction.response.send_message("❌ Je n'ai pas la permission de créer des fils de discussion.", ephemeral=True)
             return
@@ -197,19 +211,6 @@ class DownloadCog(commands.Cog):
             await interaction.response.send_message("🔍 Searching for media...")
             status_message = await interaction.original_response()
             
-            # Clean media type
-            clean_type = type.value
-            type_key = f"📷 {clean_type}" if clean_type == 'images' else \
-                      f"🎥 {clean_type}" if clean_type == 'videos' else \
-                      f"🎞️ {clean_type}" if clean_type == 'gifs' else \
-                      f"📁 {clean_type}"
-
-            # Initial message
-            if limit:
-                await status_message.edit(content=f"🔍 Searching in last {limit} messages...")
-            else:
-                await status_message.edit(content="🔍 Searching in all channel messages...")
-
             # Collect media
             media_files = []
             total_size = 0
@@ -227,7 +228,7 @@ class DownloadCog(commands.Cog):
                             total_size += attachment.size
 
             if not media_files:
-                await status_message.edit(content=f"❌ No {clean_type} found in this channel.")
+                await status_message.edit(content=f"❌ No {type_key} found in this channel.")
                 return
 
             try:
@@ -236,7 +237,7 @@ class DownloadCog(commands.Cog):
                 shell_content = self._create_shell_script(media_files)
 
                 # Create thread
-                thread_name = f"📥 Download {clean_type}"
+                thread_name = f"📥 Download {type_key}"
                 if limit:
                     thread_name += f" ({limit} messages, {len(media_files)} files)"
                 else:
@@ -396,6 +397,13 @@ class DownloadCog(commands.Cog):
     def _is_valid_type(self, filename, type_key):
         """Checks if file matches requested type"""
         ext = os.path.splitext(filename.lower())[1]
+        
+        # Debug pour voir ce qui est vérifié
+        print(f"Vérification fichier: {filename}")
+        print(f"Extension: {ext}")
+        print(f"Type recherché: {type_key}")
+        print(f"Extensions valides: {self.bot.media_types[type_key]}")
+        
         return ext in self.bot.media_types[type_key]
 
     def _format_size(self, size_bytes):
