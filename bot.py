@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import random
+import time
 
 # Configuration
 load_dotenv()
@@ -186,71 +187,59 @@ class DownloadCog(commands.Cog):
         number="Number of messages to analyze"
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[str]):
-        # Ajout de debug pour vérifier le type sélectionné
-        print(f"Type sélectionné: {type.value}")
-        
-        # Correction de la conversion du type
-        type_key = {
-            'images': '📷 images',
-            'videos': '🎥 videos',
-            'gifs': '🎞️ gifs',
-            'all': '📁 all'
-        }.get(type.value)
-        
-        print(f"Type key utilisé: {type_key}")  # Debug
-        print(f"Extensions valides: {self.media_types[type_key]}")  # Debug
-
-        if not interaction.channel.permissions_for(interaction.guild.me).create_public_threads:
-            await interaction.response.send_message("❌ Je n'ai pas la permission de créer des fils de discussion.", ephemeral=True)
-            return
-
-        if interaction.user.id in self.downloads_in_progress:
-            await interaction.response.send_message("⚠️ Vous avez déjà un téléchargement en cours.", ephemeral=True)
-            return
-
-        self.downloads_in_progress[interaction.user.id] = True
-        
         try:
+            # Ajout d'un timeout pour la réponse initiale
+            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
+            status_message = await interaction.original_response()
+
             # Convert number value
             limit = None if number.value == "-1" else int(number.value)
-            
-            await interaction.response.send_message("🔍 Searching for media...")
-            status_message = await interaction.original_response()
             
             # Collect media
             media_files = []
             total_size = 0
             processed_messages = 0
+            start_time = time.time()  # Pour suivre le temps d'exécution
             
             async with interaction.channel.typing():
                 async for message in interaction.channel.history(limit=limit):
+                    # Ajouter un timeout de sécurité
+                    if time.time() - start_time > 60:  # 60 secondes maximum
+                        await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
+                        return
+
                     processed_messages += 1
-                    if processed_messages % 100 == 0:
-                        await status_message.edit(content=f"🔍 Searching... ({processed_messages} messages processed)")
+                    if processed_messages % 50 == 0:  # Mise à jour plus fréquente
+                        await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
                     
-                    # Vérifier les pièces jointes classiques
-                    for attachment in message.attachments:
-                        if self._is_valid_type(attachment.filename, type_key):
-                            media_files.append(attachment)
-                            total_size += attachment.size
+                    try:
+                        # Vérifier les pièces jointes classiques
+                        for attachment in message.attachments:
+                            if self._is_valid_type(attachment.filename, type_key):
+                                media_files.append(attachment)
+                                total_size += attachment.size
+                        
+                        # Vérifier les embeds
+                        for embed in message.embeds:
+                            if type_key == '🎞️ gifs' and embed.type == 'image' and (
+                                'tenor.com' in embed.url or 
+                                'giphy.com' in embed.url or
+                                'discord.com/attachments' in embed.url or
+                                embed.url.lower().endswith('.gif')
+                            ):
+                                tenor_gif = TenorAttachment(
+                                    url=embed.url,
+                                    filename=f"tenor_gif_{len(media_files)}.gif",
+                                    size=0
+                                )
+                                media_files.append(tenor_gif)
                     
-                    # Ajouter la vérification des embeds (pour Tenor et autres)
-                    for embed in message.embeds:
-                        # Vérifier si c'est un GIF de Tenor
-                        if type_key == '🎞️ gifs' and embed.type == 'image' and (
-                            'tenor.com' in embed.url or 
-                            embed.url.lower().endswith('.gif')
-                        ):
-                            # Créer un faux "attachment" pour la cohérence
-                            tenor_gif = TenorAttachment(
-                                url=embed.url,
-                                filename=f"tenor_gif_{len(media_files)}.gif",
-                                size=0  # La taille n'est pas disponible pour les embeds
-                            )
-                            media_files.append(tenor_gif)
+                    except Exception as e:
+                        print(f"Erreur lors de l'analyse d'un message: {e}")
+                        continue  # Continue avec le message suivant
 
             if not media_files:
-                await status_message.edit(content=f"❌ No {type_key} found in this channel.")
+                await status_message.edit(content=f"❌ Aucun {type_key} trouvé dans ce canal.")
                 return
 
             try:
@@ -330,9 +319,9 @@ class DownloadCog(commands.Cog):
                 if 'thread' in locals():
                     await thread.delete()
 
-        finally:
-            if interaction.user.id in self.downloads_in_progress:
-                del self.downloads_in_progress[interaction.user.id]
+        except Exception as e:
+            print(f"Erreur dans download_media: {e}")
+            await interaction.followup.send(f"❌ Une erreur est survenue: {str(e)}", ephemeral=True)
 
     def _create_batch_script(self, media_files):
         """Creates Windows batch script with automatic organization"""
