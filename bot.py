@@ -192,6 +192,18 @@ class DownloadCog(commands.Cog):
             await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
             status_message = await interaction.original_response()
 
+            # Définir type_key en fonction du choix de l'utilisateur
+            type_key = {
+                'images': '📷 images',
+                'videos': '🎥 videos',
+                'gifs': '🎞️ gifs',
+                'all': '📁 all'
+            }.get(type.value)
+
+            # Debug pour vérifier le type
+            print(f"Type sélectionné: {type.value}")
+            print(f"Type key: {type_key}")
+
             # Convert number value
             limit = None if number.value == "-1" else int(number.value)
             
