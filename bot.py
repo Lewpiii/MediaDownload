@@ -188,11 +188,9 @@ class DownloadCog(commands.Cog):
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[str]):
         try:
-            # Ajout d'un timeout pour la réponse initiale
             await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
             status_message = await interaction.original_response()
 
-            # Définir type_key en fonction du choix de l'utilisateur
             type_key = {
                 'images': '📷 images',
                 'videos': '🎥 videos',
@@ -204,24 +202,21 @@ class DownloadCog(commands.Cog):
             print(f"Type sélectionné: {type.value}")
             print(f"Type key: {type_key}")
 
-            # Convert number value
             limit = None if number.value == "-1" else int(number.value)
             
-            # Collect media
             media_files = []
             total_size = 0
             processed_messages = 0
-            start_time = time.time()  # Pour suivre le temps d'exécution
+            start_time = time.time()
             
             async with interaction.channel.typing():
                 async for message in interaction.channel.history(limit=limit):
-                    # Ajouter un timeout de sécurité
-                    if time.time() - start_time > 60:  # 60 secondes maximum
+                    if time.time() - start_time > 60:
                         await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
                         return
 
                     processed_messages += 1
-                    if processed_messages % 50 == 0:  # Mise à jour plus fréquente
+                    if processed_messages % 50 == 0:
                         await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
                     
                     try:
@@ -231,24 +226,31 @@ class DownloadCog(commands.Cog):
                                 media_files.append(attachment)
                                 total_size += attachment.size
                         
-                        # Vérifier les embeds
-                        for embed in message.embeds:
-                            if type_key == '🎞️ gifs' and embed.type == 'image' and (
-                                'tenor.com' in embed.url or 
-                                'giphy.com' in embed.url or
-                                'discord.com/attachments' in embed.url or
-                                embed.url.lower().endswith('.gif')
-                            ):
-                                tenor_gif = TenorAttachment(
-                                    url=embed.url,
-                                    filename=f"tenor_gif_{len(media_files)}.gif",
-                                    size=0
-                                )
-                                media_files.append(tenor_gif)
+                        # Vérifier les embeds pour les GIFs Tenor
+                        if type_key == '🎞️ gifs':
+                            for embed in message.embeds:
+                                # Debug pour voir les embeds
+                                print(f"Embed trouvé: {embed.type} - URL: {embed.url if hasattr(embed, 'url') else 'No URL'}")
+                                
+                                # Vérifier si c'est un GIF de Tenor ou autre
+                                if (embed.type in ['image', 'gifv', 'rich'] and 
+                                    hasattr(embed, 'url') and 
+                                    ('tenor.com' in embed.url or 
+                                     'giphy.com' in embed.url or 
+                                     'discord.com/attachments' in embed.url or 
+                                     embed.url.lower().endswith('.gif'))):
+                                    
+                                    print(f"GIF trouvé: {embed.url}")  # Debug
+                                    tenor_gif = TenorAttachment(
+                                        url=embed.url,
+                                        filename=f"tenor_gif_{len(media_files)}.gif",
+                                        size=0
+                                    )
+                                    media_files.append(tenor_gif)
                     
                     except Exception as e:
                         print(f"Erreur lors de l'analyse d'un message: {e}")
-                        continue  # Continue avec le message suivant
+                        continue
 
             if not media_files:
                 await status_message.edit(content=f"❌ Aucun {type_key} trouvé dans ce canal.")
