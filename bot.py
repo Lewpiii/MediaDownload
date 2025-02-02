@@ -52,11 +52,10 @@ class MediaDownload(commands.Bot):
         intents.messages = True
         super().__init__(command_prefix='!', intents=intents)
         
-        # Correction des clés pour les types de médias
+        # Suppression des GIFs des types de médias
         self.media_types = {
             '📷 images': ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'],
             '🎥 videos': ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv'],
-            '🎞️ gifs': ['.gif'],
             '📁 all': []
         }
         self.media_types['📁 all'] = [ext for types in self.media_types.values() for ext in types]
@@ -145,7 +144,6 @@ class DownloadCog(commands.Cog):
             value=(
                 "• `📷 Images` - .jpg, .jpeg, .png, .webp\n"
                 "• `🎥 Videos` - .mp4, .mov, .webm\n"
-                "• `🎞️ GIFs` - .gif\n"
                 "• `📁 All` - All supported formats\n"
                 "━━━━━━━━━━━━━━━━━━━━━━"
             ),
@@ -170,7 +168,6 @@ class DownloadCog(commands.Cog):
         type=[
             app_commands.Choice(name="📷 Images", value="images"),
             app_commands.Choice(name="🎥 Videos", value="videos"),
-            app_commands.Choice(name="🎞️ GIFs", value="gifs"),
             app_commands.Choice(name="📁 All", value="all")
         ],
         number=[
@@ -194,13 +191,8 @@ class DownloadCog(commands.Cog):
             type_key = {
                 'images': '📷 images',
                 'videos': '🎥 videos',
-                'gifs': '🎞️ gifs',
                 'all': '📁 all'
             }.get(type.value)
-
-            # Debug pour vérifier le type
-            print(f"Type sélectionné: {type.value}")
-            print(f"Type key: {type_key}")
 
             limit = None if number.value == "-1" else int(number.value)
             
@@ -220,33 +212,10 @@ class DownloadCog(commands.Cog):
                         await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
                     
                     try:
-                        # Vérifier les pièces jointes classiques
                         for attachment in message.attachments:
                             if self._is_valid_type(attachment.filename, type_key):
                                 media_files.append(attachment)
                                 total_size += attachment.size
-                        
-                        # Vérifier les embeds pour les GIFs Tenor
-                        if type_key == '🎞️ gifs':
-                            for embed in message.embeds:
-                                # Debug pour voir les embeds
-                                print(f"Embed trouvé: {embed.type} - URL: {embed.url if hasattr(embed, 'url') else 'No URL'}")
-                                
-                                # Vérifier si c'est un GIF de Tenor ou autre
-                                if (embed.type in ['image', 'gifv', 'rich'] and 
-                                    hasattr(embed, 'url') and 
-                                    ('tenor.com' in embed.url or 
-                                     'giphy.com' in embed.url or 
-                                     'discord.com/attachments' in embed.url or 
-                                     embed.url.lower().endswith('.gif'))):
-                                    
-                                    print(f"GIF trouvé: {embed.url}")  # Debug
-                                    tenor_gif = TenorAttachment(
-                                        url=embed.url,
-                                        filename=f"tenor_gif_{len(media_files)}.gif",
-                                        size=0
-                                    )
-                                    media_files.append(tenor_gif)
                     
                     except Exception as e:
                         print(f"Erreur lors de l'analyse d'un message: {e}")
