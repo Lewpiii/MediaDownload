@@ -11,6 +11,7 @@ import time
 import asyncio
 import aiohttp
 import sys
+import traceback
 
 # Configuration
 load_dotenv()
@@ -22,6 +23,7 @@ print("=== Debug Discord Bot ===")
 print(f"Token exists: {'Yes' if TOKEN else 'No'}")
 print(f"Token length: {len(TOKEN) if TOKEN else 0}")
 print(f"Token first 5 chars: {TOKEN[:5] if TOKEN else 'None'}")
+print(f"Logs Channel ID: {LOGS_CHANNEL_ID}")
 print("=======================")
 
 if not TOKEN:
@@ -58,6 +60,7 @@ class MediaDownload(commands.Bot):
         self.status_index = 0
         self.status_update_task = None
         self.logs_channel = None
+        self.start_time = datetime.now()
         
         # Suppression des GIFs des types de médias
         self.media_types = {
@@ -89,10 +92,59 @@ class MediaDownload(commands.Bot):
                     color=0x2ecc71,
                     timestamp=datetime.now()
                 )
+                embed.add_field(
+                    name="Environment",
+                    value="```\nRender Starter```",
+                    inline=False
+                )
+                embed.add_field(
+                    name="Version",
+                    value=f"Discord.py {discord.__version__}",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Start Time",
+                    value=self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    inline=True
+                )
                 await self.logs_channel.send(embed=embed)
             
         except Exception as e:
             print(f"❌ Erreur lors de l'initialisation: {e}")
+            if self.logs_channel:
+                await self.send_error_log("Setup Hook", e)
+
+    async def send_error_log(self, context, error):
+        """Envoie un message d'erreur détaillé dans le canal de logs"""
+        if self.logs_channel:
+            embed = discord.Embed(
+                title="⚠️ Error Occurred",
+                description=f"An error occurred in {context}",
+                color=0xe74c3c,
+                timestamp=datetime.now()
+            )
+            
+            # Obtenir le traceback complet
+            error_traceback = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+            
+            # Ajouter les détails de l'erreur
+            embed.add_field(
+                name="Error Type",
+                value=f"`{type(error).__name__}`",
+                inline=False
+            )
+            embed.add_field(
+                name="Error Message",
+                value=f"```py\n{str(error)}\n```",
+                inline=False
+            )
+            embed.add_field(
+                name="Traceback",
+                value=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```",
+                inline=False
+            )
+            
+            await self.logs_channel.send(embed=embed)
 
     async def change_status(self):
         while not self.is_closed():
@@ -122,11 +174,17 @@ class MediaDownload(commands.Bot):
     async def close(self):
         if self.logs_channel:
             try:
+                uptime = datetime.now() - self.start_time
                 embed = discord.Embed(
                     title="🔴 Service Stopped",
                     description="Bot is shutting down",
                     color=0xe74c3c,
                     timestamp=datetime.now()
+                )
+                embed.add_field(
+                    name="Uptime",
+                    value=str(uptime).split('.')[0],
+                    inline=True
                 )
                 await self.logs_channel.send(embed=embed)
             except:
@@ -136,23 +194,8 @@ class MediaDownload(commands.Bot):
         await super().close()
 
     async def on_error(self, event, *args, **kwargs):
-        if self.logs_channel:
-            embed = discord.Embed(
-                title="⚠️ Error Occurred",
-                description=f"An error occurred in {event}",
-                color=0xe74c3c,
-                timestamp=datetime.now()
-            )
-            
-            error = sys.exc_info()
-            if error:
-                embed.add_field(
-                    name="Error Details",
-                    value=f"```py\n{error[1]}\n```",
-                    inline=False
-                )
-            
-            await self.logs_channel.send(embed=embed)
+        error = sys.exc_info()
+        await self.send_error_log(f"Event: {event}", error[1])
 
     async def on_message(self, message):
         # Prevent bot from responding to itself
