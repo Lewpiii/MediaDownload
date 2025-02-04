@@ -16,7 +16,7 @@ import traceback
 # Configuration
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-LOGS_CHANNEL_ID = int(os.getenv('LOGS_CHANNEL_ID'))  # ID du canal pour les logs
+LOGS_CHANNEL_ID = os.getenv('LOGS_CHANNEL_ID')  # On récupère d'abord la chaîne
 
 # Debug amélioré
 print("=== Debug Discord Bot ===")
@@ -28,6 +28,14 @@ print("=======================")
 
 if not TOKEN:
     raise ValueError("❌ Discord Token not found!")
+
+try:
+    LOGS_CHANNEL_ID = int(LOGS_CHANNEL_ID) if LOGS_CHANNEL_ID else None
+    if not LOGS_CHANNEL_ID:
+        print("⚠️ Warning: Logs Channel ID not set or invalid")
+except ValueError:
+    print(f"❌ Error: Invalid Logs Channel ID format: {LOGS_CHANNEL_ID}")
+    LOGS_CHANNEL_ID = None
 
 # List of random English responses to add
 RANDOM_RESPONSES = [
@@ -84,30 +92,35 @@ class MediaDownload(commands.Bot):
             print("✅ Status update task started!")
 
             # Initialiser le canal de logs
-            self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
-            if self.logs_channel:
-                embed = discord.Embed(
-                    title="🟢 Service Started",
-                    description="Bot is now online and operational",
-                    color=0x2ecc71,
-                    timestamp=datetime.now()
-                )
-                embed.add_field(
-                    name="Environment",
-                    value="```\nRender Starter```",
-                    inline=False
-                )
-                embed.add_field(
-                    name="Version",
-                    value=f"Discord.py {discord.__version__}",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Start Time",
-                    value=self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    inline=True
-                )
-                await self.logs_channel.send(embed=embed)
+            if LOGS_CHANNEL_ID:
+                self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
+                print(f"Looking for logs channel: {LOGS_CHANNEL_ID}")
+                if self.logs_channel:
+                    print("✅ Logs channel found!")
+                    embed = discord.Embed(
+                        title="🟢 Service Started",
+                        description="Bot is now online and operational",
+                        color=0x2ecc71,
+                        timestamp=datetime.now()
+                    )
+                    embed.add_field(
+                        name="Environment",
+                        value="```\nRender Starter```",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="Version",
+                        value=f"Discord.py {discord.__version__}",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="Start Time",
+                        value=self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                        inline=True
+                    )
+                    await self.logs_channel.send(embed=embed)
+                else:
+                    print("❌ Logs channel not found!")
             
         except Exception as e:
             print(f"❌ Erreur lors de l'initialisation: {e}")
