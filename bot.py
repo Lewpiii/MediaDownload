@@ -88,11 +88,7 @@ class MediaDownload(commands.Bot):
                     ),
                     discord.Activity(
                         type=discord.ActivityType.watching,
-                        name=f"{len(self.guilds)} servers"
-                    ),
-                    discord.Activity(
-                        type=discord.ActivityType.watching,
-                        name=f"{sum(g.member_count for g in self.guilds)} users"
+                        name=f"{len(self.guilds)} servers | {sum(g.member_count for g in self.guilds)} users"
                     )
                 ]
                 
