@@ -74,29 +74,34 @@ class MediaDownload(commands.Bot):
             
             # Démarrer la tâche de mise à jour du statut
             self.status_update_task = self.loop.create_task(self.change_status())
+            print("✅ Status update task started!")
         except Exception as e:
             print(f"❌ Erreur lors de l'initialisation: {e}")
 
     async def change_status(self):
         while not self.is_closed():
-            statuses = [
-                discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=f"/help for commands"
-                ),
-                discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=f"over {len(self.guilds)} servers"
-                ),
-                discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=f"{sum(g.member_count for g in self.guilds)} users"
-                )
-            ]
-            
-            await self.change_presence(activity=statuses[self.status_index])
-            self.status_index = (self.status_index + 1) % len(statuses)
-            await asyncio.sleep(20)  # Change toutes les 5 minutes (300 secondes)
+            try:
+                statuses = [
+                    discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name="/help for commands"
+                    ),
+                    discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name=f"{len(self.guilds)} servers"
+                    ),
+                    discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name=f"{sum(g.member_count for g in self.guilds)} users"
+                    )
+                ]
+                
+                await self.change_presence(activity=statuses[self.status_index])
+                self.status_index = (self.status_index + 1) % len(statuses)
+                await asyncio.sleep(20)  # Change toutes les 20 secondes
+            except Exception as e:
+                print(f"Error in change_status: {e}")
+                await asyncio.sleep(20)
 
     async def on_ready(self):
         print(f"✅ Logged in as {self.user}")
@@ -436,6 +441,9 @@ class DownloadCog(commands.Cog):
 
     @app_commands.command(name="stats", description="Show bot statistics")
     async def stats(self, interaction: discord.Interaction):
+        total_users = sum(g.member_count for g in self.bot.guilds)
+        uptime = datetime.now() - self.bot.start_time
+        
         embed = discord.Embed(
             title="📊 Bot Statistics",
             color=self.color
@@ -443,9 +451,12 @@ class DownloadCog(commands.Cog):
         
         embed.add_field(
             name="📈 General",
-            value=f"Servers: {len(self.bot.guilds)}\n"
-                  f"Uptime: {datetime.now() - self.bot.start_time}\n"
-                  f"Latency: {round(self.bot.latency * 1000)}ms",
+            value=(
+                f"**Servers:** {len(self.bot.guilds)}\n"
+                f"**Users:** {total_users:,}\n"
+                f"**Uptime:** {str(uptime).split('.')[0]}\n"
+                f"**Latency:** {round(self.bot.latency * 1000)}ms"
+            ),
             inline=False
         )
         
