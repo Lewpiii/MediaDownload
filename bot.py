@@ -9,10 +9,13 @@ from dotenv import load_dotenv
 import random
 import time
 import asyncio
+import aiohttp
+import sys
 
 # Configuration
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+LOGS_CHANNEL_ID = int(os.getenv('LOGS_CHANNEL_ID'))  # ID du canal pour les logs
 
 # Debug amélioré
 print("=== Debug Discord Bot ===")
@@ -54,6 +57,7 @@ class MediaDownload(commands.Bot):
         super().__init__(command_prefix='!', intents=intents)
         self.status_index = 0
         self.status_update_task = None
+        self.logs_channel = None
         
         # Suppression des GIFs des types de médias
         self.media_types = {
@@ -75,6 +79,18 @@ class MediaDownload(commands.Bot):
             # Démarrer la tâche de mise à jour du statut
             self.status_update_task = self.loop.create_task(self.change_status())
             print("✅ Status update task started!")
+
+            # Initialiser le canal de logs
+            self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
+            if self.logs_channel:
+                embed = discord.Embed(
+                    title="🟢 Service Started",
+                    description="Bot is now online and operational",
+                    color=0x2ecc71,
+                    timestamp=datetime.now()
+                )
+                await self.logs_channel.send(embed=embed)
+            
         except Exception as e:
             print(f"❌ Erreur lors de l'initialisation: {e}")
 
@@ -104,9 +120,39 @@ class MediaDownload(commands.Bot):
         print(f"🌐 In {len(self.guilds)} servers")
 
     async def close(self):
+        if self.logs_channel:
+            try:
+                embed = discord.Embed(
+                    title="🔴 Service Stopped",
+                    description="Bot is shutting down",
+                    color=0xe74c3c,
+                    timestamp=datetime.now()
+                )
+                await self.logs_channel.send(embed=embed)
+            except:
+                pass
         if self.status_update_task:
             self.status_update_task.cancel()
         await super().close()
+
+    async def on_error(self, event, *args, **kwargs):
+        if self.logs_channel:
+            embed = discord.Embed(
+                title="⚠️ Error Occurred",
+                description=f"An error occurred in {event}",
+                color=0xe74c3c,
+                timestamp=datetime.now()
+            )
+            
+            error = sys.exc_info()
+            if error:
+                embed.add_field(
+                    name="Error Details",
+                    value=f"```py\n{error[1]}\n```",
+                    inline=False
+                )
+            
+            await self.logs_channel.send(embed=embed)
 
     async def on_message(self, message):
         # Prevent bot from responding to itself
