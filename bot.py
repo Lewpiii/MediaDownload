@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import random
 import time
+import asyncio
 
 # Configuration
 load_dotenv()
@@ -51,6 +52,8 @@ class MediaDownload(commands.Bot):
         intents.guilds = True
         intents.messages = True
         super().__init__(command_prefix='!', intents=intents)
+        self.status_index = 0
+        self.status_update_task = None
         
         # Suppression des GIFs des types de médias
         self.media_types = {
@@ -68,18 +71,41 @@ class MediaDownload(commands.Bot):
             # Synchronisation des commandes
             await self.tree.sync()
             print("✅ Commandes slash synchronisées globalement!")
+            
+            # Démarrer la tâche de mise à jour du statut
+            self.status_update_task = self.loop.create_task(self.change_status())
         except Exception as e:
             print(f"❌ Erreur lors de l'initialisation: {e}")
+
+    async def change_status(self):
+        while not self.is_closed():
+            statuses = [
+                discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"/help for commands"
+                ),
+                discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"over {len(self.guilds)} servers"
+                ),
+                discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"{sum(g.member_count for g in self.guilds)} users"
+                )
+            ]
+            
+            await self.change_presence(activity=statuses[self.status_index])
+            self.status_index = (self.status_index + 1) % len(statuses)
+            await asyncio.sleep(20)  # Change toutes les 5 minutes (300 secondes)
 
     async def on_ready(self):
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name="/help for commands"
-            )
-        )
+
+    async def close(self):
+        if self.status_update_task:
+            self.status_update_task.cancel()
+        await super().close()
 
     async def on_message(self, message):
         # Prevent bot from responding to itself
@@ -439,5 +465,4 @@ async def main():
         print(f"❌ Unexpected error: {str(e)}")
 
 # Start bot
-import asyncio
 asyncio.run(main()) 
