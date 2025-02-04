@@ -90,9 +90,17 @@ class MediaDownload(commands.Bot):
             # Démarrer la tâche de mise à jour du statut
             self.status_update_task = self.loop.create_task(self.change_status())
             print("✅ Status update task started!")
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de l'initialisation: {e}")
 
-            # Initialiser le canal de logs
-            if LOGS_CHANNEL_ID:
+    async def on_ready(self):
+        print(f"✅ Logged in as {self.user}")
+        print(f"🌐 In {len(self.guilds)} servers")
+
+        # Initialiser le canal de logs
+        if LOGS_CHANNEL_ID:
+            try:
                 self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
                 print(f"Looking for logs channel: {LOGS_CHANNEL_ID}")
                 if self.logs_channel:
@@ -121,11 +129,10 @@ class MediaDownload(commands.Bot):
                     await self.logs_channel.send(embed=embed)
                 else:
                     print("❌ Logs channel not found!")
-            
-        except Exception as e:
-            print(f"❌ Erreur lors de l'initialisation: {e}")
-            if self.logs_channel:
-                await self.send_error_log("Setup Hook", e)
+                    print(f"Available channels: {[channel.name for channel in self.get_all_channels()]}")
+            except Exception as e:
+                print(f"❌ Error in on_ready while setting up logs: {str(e)}")
+                print(f"Full error: {traceback.format_exc()}")
 
     async def send_error_log(self, context, error):
         """Envoie un message d'erreur détaillé dans le canal de logs"""
@@ -179,10 +186,6 @@ class MediaDownload(commands.Bot):
             except Exception as e:
                 print(f"Error in change_status: {e}")
                 await asyncio.sleep(20)
-
-    async def on_ready(self):
-        print(f"✅ Logged in as {self.user}")
-        print(f"🌐 In {len(self.guilds)} servers")
 
     async def close(self):
         if self.logs_channel:
