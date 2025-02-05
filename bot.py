@@ -72,6 +72,9 @@ class MediaDownload(commands.Bot):
         self.logs_channel = None
         self.commits_channel = None
         self.start_time = datetime.now()
+        self.heartbeat_task = None
+        self.last_heartbeat = None
+        self.alert_threshold = 60  # Seuil d'alerte en secondes
         
         # Suppression des GIFs des types de médias
         self.media_types = {
@@ -94,6 +97,10 @@ class MediaDownload(commands.Bot):
             self.status_update_task = self.loop.create_task(self.change_status())
             print("✅ Status update task started!")
             
+            # Démarrer la tâche de heartbeat
+            self.heartbeat_task = self.loop.create_task(self.heartbeat())
+            print("✅ Heartbeat task started!")
+            
         except Exception as e:
             print(f"❌ Erreur lors de l'initialisation: {e}")
 
@@ -108,6 +115,34 @@ class MediaDownload(commands.Bot):
                 print(f"Looking for logs channel: {LOGS_CHANNEL_ID}")
                 if self.logs_channel:
                     print("✅ Logs channel found!")
+                    
+                    # Vérifier si le bot était down
+                    try:
+                        with open('last_heartbeat.txt', 'r') as f:
+                            last_heartbeat = datetime.fromisoformat(f.read().strip())
+                            downtime = datetime.now() - last_heartbeat
+                            if downtime.total_seconds() > self.alert_threshold:
+                                embed = discord.Embed(
+                                    title="🔄 Service Recovered",
+                                    description="Bot was down and has recovered",
+                                    color=0xf1c40f,
+                                    timestamp=datetime.now()
+                                )
+                                embed.add_field(
+                                    name="Downtime Duration",
+                                    value=str(downtime).split('.')[0],
+                                    inline=True
+                                )
+                                embed.add_field(
+                                    name="Last Seen",
+                                    value=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S"),
+                                    inline=True
+                                )
+                                await self.logs_channel.send(embed=embed)
+                    except FileNotFoundError:
+                        pass  # Premier démarrage du bot
+
+                    # Message normal de démarrage
                     embed = discord.Embed(
                         title="🟢 Service Started",
                         description="Bot is now online and operational",
@@ -198,6 +233,61 @@ class MediaDownload(commands.Bot):
                 print(f"Error in change_status: {e}")
                 await asyncio.sleep(20)
 
+    async def heartbeat(self):
+        """Envoie un signal périodique pour indiquer que le bot est en vie"""
+        while not self.is_closed():
+            try:
+                current_time = datetime.now()
+                self.last_heartbeat = current_time
+                
+                if self.logs_channel:
+                    # Stocker le timestamp du dernier heartbeat
+                    with open('last_heartbeat.txt', 'w') as f:
+                        f.write(self.last_heartbeat.isoformat())
+                    
+                    # Vérifier si le dernier heartbeat est trop ancien
+                    if self.last_heartbeat:
+                        time_since_last = (current_time - self.last_heartbeat).total_seconds()
+                        if time_since_last > self.alert_threshold:
+                            embed = discord.Embed(
+                                title="⚠️ Service Alert",
+                                description="Bot is experiencing delays",
+                                color=0xff9900,
+                                timestamp=current_time
+                            )
+                            embed.add_field(
+                                name="Last Response",
+                                value=f"{time_since_last:.1f} seconds ago",
+                                inline=True
+                            )
+                            embed.add_field(
+                                name="Status",
+                                value="Investigating",
+                                inline=True
+                            )
+                            await self.logs_channel.send(embed=embed)
+                
+                await asyncio.sleep(30)  # Vérification toutes les 30 secondes
+            except Exception as e:
+                print(f"Error in heartbeat: {e}")
+                if self.logs_channel:
+                    try:
+                        embed = discord.Embed(
+                            title="🔴 Heartbeat Error",
+                            description="Error in heartbeat monitoring",
+                            color=0xe74c3c,
+                            timestamp=datetime.now()
+                        )
+                        embed.add_field(
+                            name="Error",
+                            value=f"```{str(e)}```",
+                            inline=False
+                        )
+                        await self.logs_channel.send(embed=embed)
+                    except:
+                        pass
+                await asyncio.sleep(30)
+
     async def close(self):
         if self.logs_channel:
             try:
@@ -218,6 +308,8 @@ class MediaDownload(commands.Bot):
                 pass
         if self.status_update_task:
             self.status_update_task.cancel()
+        if self.heartbeat_task:
+            self.heartbeat_task.cancel()
         await super().close()
 
     async def on_error(self, event, *args, **kwargs):
