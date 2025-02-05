@@ -17,7 +17,8 @@ import traceback
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 LOGS_CHANNEL_ID = os.getenv('LOGS_CHANNEL_ID')
-COMMITS_CHANNEL_ID = os.getenv('COMMITS_CHANNEL_ID')  # Nouveau canal pour les commits
+COMMITS_CHANNEL_ID = os.getenv('COMMITS_CHANNEL_ID')
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Nouveau: URL du webhook
 
 # Debug amélioré
 print("=== Debug Discord Bot ===")
@@ -26,6 +27,7 @@ print(f"Token length: {len(TOKEN) if TOKEN else 0}")
 print(f"Token first 5 chars: {TOKEN[:5] if TOKEN else 'None'}")
 print(f"Logs Channel ID: {LOGS_CHANNEL_ID}")
 print(f"Commits Channel ID: {COMMITS_CHANNEL_ID}")
+print(f"Webhook URL exists: {'Yes' if WEBHOOK_URL else 'No'}")
 print("=======================")
 
 if not TOKEN:
@@ -352,6 +354,24 @@ class MediaDownload(commands.Bot):
                 await self.commits_channel.send(embed=embed)
             except Exception as e:
                 print(f"❌ Error sending commit notification: {e}")
+
+    async def send_commit_webhook(self, commit_info):
+        """Envoie une notification de commit via webhook Discord"""
+        if WEBHOOK_URL:
+            async with aiohttp.ClientSession() as session:
+                webhook = discord.Webhook.from_url(WEBHOOK_URL, session=session)
+                
+                embed = discord.Embed(
+                    title="🔄 Nouveau Commit",
+                    description=commit_info['message'],
+                    color=0x2ecc71,
+                    timestamp=datetime.now()
+                )
+                
+                embed.add_field(name="Auteur", value=commit_info['author'], inline=True)
+                embed.add_field(name="Branch", value=commit_info['branch'], inline=True)
+                
+                await webhook.send(embed=embed)
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
