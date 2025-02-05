@@ -16,7 +16,8 @@ import traceback
 # Configuration
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-LOGS_CHANNEL_ID = os.getenv('LOGS_CHANNEL_ID')  # On récupère d'abord la chaîne
+LOGS_CHANNEL_ID = os.getenv('LOGS_CHANNEL_ID')
+COMMITS_CHANNEL_ID = os.getenv('COMMITS_CHANNEL_ID')  # Nouveau canal pour les commits
 
 # Debug amélioré
 print("=== Debug Discord Bot ===")
@@ -24,6 +25,7 @@ print(f"Token exists: {'Yes' if TOKEN else 'No'}")
 print(f"Token length: {len(TOKEN) if TOKEN else 0}")
 print(f"Token first 5 chars: {TOKEN[:5] if TOKEN else 'None'}")
 print(f"Logs Channel ID: {LOGS_CHANNEL_ID}")
+print(f"Commits Channel ID: {COMMITS_CHANNEL_ID}")
 print("=======================")
 
 if not TOKEN:
@@ -31,11 +33,11 @@ if not TOKEN:
 
 try:
     LOGS_CHANNEL_ID = int(LOGS_CHANNEL_ID) if LOGS_CHANNEL_ID else None
+    COMMITS_CHANNEL_ID = int(COMMITS_CHANNEL_ID) if COMMITS_CHANNEL_ID else None
     if not LOGS_CHANNEL_ID:
         print("⚠️ Warning: Logs Channel ID not set or invalid")
-except ValueError:
-    print(f"❌ Error: Invalid Logs Channel ID format: {LOGS_CHANNEL_ID}")
-    LOGS_CHANNEL_ID = None
+except ValueError as e:
+    print(f"❌ Error converting channel IDs: {e}")
 
 # List of random English responses to add
 RANDOM_RESPONSES = [
@@ -68,6 +70,7 @@ class MediaDownload(commands.Bot):
         self.status_index = 0
         self.status_update_task = None
         self.logs_channel = None
+        self.commits_channel = None
         self.start_time = datetime.now()
         
         # Suppression des GIFs des types de médias
@@ -98,7 +101,7 @@ class MediaDownload(commands.Bot):
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
 
-        # Initialiser le canal de logs
+        # Initialiser les canaux
         if LOGS_CHANNEL_ID:
             try:
                 self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
@@ -133,6 +136,14 @@ class MediaDownload(commands.Bot):
             except Exception as e:
                 print(f"❌ Error in on_ready while setting up logs: {str(e)}")
                 print(f"Full error: {traceback.format_exc()}")
+
+        if COMMITS_CHANNEL_ID:
+            try:
+                self.commits_channel = self.get_channel(COMMITS_CHANNEL_ID)
+                if self.commits_channel:
+                    print("✅ Commits channel found!")
+            except Exception as e:
+                print(f"❌ Error with commits channel: {e}")
 
     async def send_error_log(self, context, error):
         """Envoie un message d'erreur détaillé dans le canal de logs"""
@@ -232,6 +243,23 @@ class MediaDownload(commands.Bot):
 
         # Don't forget this line if you have commands in your bot
         await self.process_commands(message)
+
+    async def send_commit_notification(self, commit_info):
+        """Envoie une notification de commit dans le canal dédié"""
+        if self.commits_channel:
+            try:
+                embed = discord.Embed(
+                    title="🔄 New Commit",
+                    description=commit_info['message'],
+                    color=0x3498db,
+                    timestamp=datetime.now()
+                )
+                embed.add_field(name="Author", value=commit_info['author'], inline=True)
+                embed.add_field(name="Branch", value=commit_info['branch'], inline=True)
+                
+                await self.commits_channel.send(embed=embed)
+            except Exception as e:
+                print(f"❌ Error sending commit notification: {e}")
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
