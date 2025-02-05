@@ -18,7 +18,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 LOGS_CHANNEL_ID = os.getenv('LOGS_CHANNEL_ID')
 COMMITS_CHANNEL_ID = os.getenv('COMMITS_CHANNEL_ID')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Nouveau: URL du webhook
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # URL du webhook Discord
 
 # Debug amélioré
 print("=== Debug Discord Bot ===")
@@ -47,7 +47,6 @@ RANDOM_RESPONSES = [
     "Fart! 💨",
     "Peepee! 🚽",
     "Poopoo! 💩",
-    "...",
     "Making bubbles in my bath! 🛁",
     "Did someone talk about me? *blushes* 😳",
     "Did someone call? 👀",
@@ -111,7 +110,6 @@ class MediaDownload(commands.Bot):
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
 
-        # Initialiser les canaux
         if LOGS_CHANNEL_ID:
             try:
                 self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
@@ -170,10 +168,8 @@ class MediaDownload(commands.Bot):
                     await self.logs_channel.send(embed=embed)
                 else:
                     print("❌ Logs channel not found!")
-                    print(f"Available channels: {[channel.name for channel in self.get_all_channels()]}")
             except Exception as e:
-                print(f"❌ Error in on_ready while setting up logs: {str(e)}")
-                print(f"Full error: {traceback.format_exc()}")
+                print(f"❌ Error in on_ready: {e}")
 
         if COMMITS_CHANNEL_ID:
             try:
@@ -373,6 +369,34 @@ class MediaDownload(commands.Bot):
                 embed.add_field(name="Branch", value=commit_info['branch'], inline=True)
                 
                 await webhook.send(embed=embed)
+
+    async def send_deploy_notification(self, deploy_info):
+        """Envoie une notification de déploiement dans le canal dédié"""
+        if self.commits_channel:
+            try:
+                embed = discord.Embed(
+                    title="🚀 New Deployment",
+                    description="A new version is being deployed",
+                    color=0x3498db,
+                    timestamp=datetime.now()
+                )
+                
+                if 'commit' in deploy_info:
+                    embed.add_field(
+                        name="Commit",
+                        value=deploy_info['commit'][:7],
+                        inline=True
+                    )
+                
+                embed.add_field(
+                    name="Status",
+                    value="🔄 In Progress",
+                    inline=True
+                )
+                
+                await self.commits_channel.send(embed=embed)
+            except Exception as e:
+                print(f"❌ Error sending deploy notification: {e}")
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
