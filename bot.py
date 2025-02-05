@@ -110,6 +110,7 @@ class MediaDownload(commands.Bot):
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
 
+        # Initialiser les canaux
         if LOGS_CHANNEL_ID:
             try:
                 self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
@@ -168,8 +169,10 @@ class MediaDownload(commands.Bot):
                     await self.logs_channel.send(embed=embed)
                 else:
                     print("❌ Logs channel not found!")
+                    print(f"Available channels: {[channel.name for channel in self.get_all_channels()]}")
             except Exception as e:
-                print(f"❌ Error in on_ready: {e}")
+                print(f"❌ Error in on_ready while setting up logs: {str(e)}")
+                print(f"Full error: {traceback.format_exc()}")
 
         if COMMITS_CHANNEL_ID:
             try:
