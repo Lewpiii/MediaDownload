@@ -324,6 +324,50 @@ class MediaDownload(commands.Bot):
         # Don't forget this line if you have commands in your bot
         await self.process_commands(message)
 
+    async def on_guild_join(self, guild):
+        """Quand le bot rejoint un nouveau serveur"""
+        if self.logs_channel:
+            embed = discord.Embed(
+                title="🎉 Bot Added to New Server",
+                description=f"Bot has been added to {guild.name}",
+                color=0x2ecc71,
+                timestamp=datetime.now()
+            )
+            embed.add_field(
+                name="Server Info",
+                value=f"""
+                **Name:** {guild.name}
+                **ID:** {guild.id}
+                **Owner:** {guild.owner}
+                **Members:** {guild.member_count}
+                **Created:** <t:{int(guild.created_at.timestamp())}:R>
+                """,
+                inline=False
+            )
+            if guild.icon:
+                embed.set_thumbnail(url=guild.icon.url)
+            await self.logs_channel.send(embed=embed)
+
+    async def on_guild_remove(self, guild):
+        """Quand le bot est retiré d'un serveur"""
+        if self.logs_channel:
+            embed = discord.Embed(
+                title="❌ Bot Removed from Server",
+                description=f"Bot has been removed from {guild.name}",
+                color=0xe74c3c,
+                timestamp=datetime.now()
+            )
+            embed.add_field(
+                name="Server Info",
+                value=f"""
+                **Name:** {guild.name}
+                **ID:** {guild.id}
+                **Members:** {guild.member_count}
+                """,
+                inline=False
+            )
+            await self.logs_channel.send(embed=embed)
+
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
