@@ -47,6 +47,7 @@ RANDOM_RESPONSES = [
     "Fart! 💨",
     "Peepee! 🚽",
     "Poopoo! 💩",
+    "...",
     "Making bubbles in my bath! 🛁",
     "Did someone talk about me? *blushes* 😳",
     "Did someone call? 👀",
