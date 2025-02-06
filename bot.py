@@ -374,9 +374,14 @@ class DownloadCog(commands.Cog):
         self.bot = bot
         self.color = 0x2ecc71
         self.downloads_in_progress = {}
-        self.download_count = 0  # Compteur de téléchargements
-        self.successful_downloads = 0  # Téléchargements réussis
-        self.failed_downloads = 0  # Téléchargements échoués
+        self.download_count = 0  # Total downloads
+        self.successful_downloads = 0  # Successful downloads
+        self.failed_downloads = 0  # Failed downloads
+        self.downloads_by_type = {
+            'images': 0,
+            'videos': 0,
+            'all': 0
+        }
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -401,10 +406,24 @@ class DownloadCog(commands.Cog):
             value=(
                 "**`/download`**\n"
                 "Download media files from the current Discord channel\n"
-                "• `type` - Select media type (images, videos, gifs, all)\n"
+                "• `type` - Select media type (images, videos, all)\n"
                 "• `number` - Number of messages to analyze\n\n"
                 "**`/stats`**\n"
-                "View bot statistics\n"
+                "View download statistics\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="ℹ️ Utility Commands",
+            value=(
+                "**`/botinfo`**\n"
+                "Display bot system information\n\n"
+                "**`/suggest`**\n"
+                "Submit a suggestion for the bot\n\n"
+                "**`/bug`**\n"
+                "Report a bug\n"
                 "━━━━━━━━━━━━━━━━━━━━━━"
             ),
             inline=False
@@ -568,13 +587,13 @@ class DownloadCog(commands.Cog):
                 )
                 await status_message.edit(content=None, embed=embed_status)
 
-                await self.increment_stats(success=True, platform='tiktok')
+                await self.increment_stats(success=True, media_type=type.value)
 
             except Exception as e:
                 await status_message.edit(content=f"❌ Error: {str(e)}")
                 if 'thread' in locals():
                     await thread.delete()
-                await self.increment_stats(success=False, platform='tiktok')
+                await self.increment_stats(success=False, media_type=type.value)
 
         except Exception as e:
             print(f"Erreur dans download_media: {e}")
@@ -682,39 +701,39 @@ class DownloadCog(commands.Cog):
             size_bytes /= 1024
         return f"{size_bytes:.2f} TB"
 
-    @app_commands.command(name="stats", description="Affiche les statistiques de téléchargement")
+    @app_commands.command(name="stats", description="Display download statistics")
     async def stats(self, interaction: discord.Interaction):
         try:
             embed = discord.Embed(
-                title="📊 Statistiques de Téléchargement",
+                title="📊 Download Statistics",
                 color=0x2ecc71,
                 timestamp=datetime.now()
             )
             
-            # Calcul du taux de réussite
+            # Calculate success rate
             if self.download_count > 0:
                 success_rate = (self.successful_downloads / self.download_count) * 100
             else:
                 success_rate = 0
 
             embed.add_field(
-                name="📈 Téléchargements",
+                name="📈 Downloads",
                 value=f"""
                 **Total:** {self.download_count}
-                **Réussis:** {self.successful_downloads}
-                **Échoués:** {self.failed_downloads}
-                **Taux de réussite:** {success_rate:.1f}%
+                **Successful:** {self.successful_downloads}
+                **Failed:** {self.failed_downloads}
+                **Success Rate:** {success_rate:.1f}%
                 """,
                 inline=False
             )
 
-            # Ajouter cette partie si vous voulez suivre les téléchargements par type
+            # Stats by media type
             embed.add_field(
-                name="📊 Par Type",
+                name="📊 By Type",
                 value=f"""
-                **TikTok:** {getattr(self, 'tiktok_downloads', 0)}
-                **Instagram:** {getattr(self, 'instagram_downloads', 0)}
-                **YouTube:** {getattr(self, 'youtube_downloads', 0)}
+                **Images:** {self.downloads_by_type['images']}
+                **Videos:** {self.downloads_by_type['videos']}
+                **All Files:** {self.downloads_by_type['all']}
                 """,
                 inline=True
             )
@@ -722,45 +741,42 @@ class DownloadCog(commands.Cog):
             await interaction.response.send_message(embed=embed)
         except Exception as e:
             await self.bot.log_event("❌ Error", f"Error in stats command: {str(e)}", 0xe74c3c)
-            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+            await interaction.response.send_message("An error occurred.", ephemeral=True)
 
-    async def increment_stats(self, success=True, platform=None):
+    async def increment_stats(self, success=True, media_type='all'):
+        """Update download statistics"""
         self.download_count += 1
         if success:
             self.successful_downloads += 1
         else:
             self.failed_downloads += 1
             
-        # Incrémenter les compteurs par plateforme
-        if platform == 'tiktok':
-            self.tiktok_downloads = getattr(self, 'tiktok_downloads', 0) + 1
-        elif platform == 'instagram':
-            self.instagram_downloads = getattr(self, 'instagram_downloads', 0) + 1
-        elif platform == 'youtube':
-            self.youtube_downloads = getattr(self, 'youtube_downloads', 0) + 1
+        # Increment media type counter
+        if media_type in self.downloads_by_type:
+            self.downloads_by_type[media_type] += 1
 
 class UtilsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="botinfo", description="Affiche les informations système du bot")
+    @app_commands.command(name="botinfo", description="Display bot system information")
     async def botinfo(self, interaction: discord.Interaction):
         try:
             total_users = sum(g.member_count for g in self.bot.guilds)
             total_channels = sum(len(g.channels) for g in self.bot.guilds)
             
             embed = discord.Embed(
-                title="ℹ️ Informations du Bot",
+                title="ℹ️ Bot Information",
                 color=0x3498db,
                 timestamp=datetime.now()
             )
             
             embed.add_field(
-                name="📈 Général",
+                name="📈 General",
                 value=f"""
-                **Serveurs:** {len(self.bot.guilds)}
-                **Utilisateurs:** {total_users:,}
-                **Canaux:** {total_channels:,}
+                **Servers:** {len(self.bot.guilds)}
+                **Users:** {total_users:,}
+                **Channels:** {total_channels:,}
                 """,
                 inline=True
             )
@@ -768,7 +784,7 @@ class UtilsCog(commands.Cog):
             embed.add_field(
                 name="⚙️ Performance",
                 value=f"""
-                **Latence:** {round(self.bot.latency * 1000)}ms
+                **Latency:** {round(self.bot.latency * 1000)}ms
                 **Uptime:** {str(datetime.now() - self.bot.start_time).split('.')[0]}
                 **Version:** {discord.__version__}
                 """,
@@ -778,7 +794,7 @@ class UtilsCog(commands.Cog):
             await interaction.response.send_message(embed=embed)
         except Exception as e:
             await self.bot.log_event("❌ Error", f"Error in botinfo command: {str(e)}", 0xe74c3c)
-            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+            await interaction.response.send_message("An error occurred.", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Soumettre une suggestion pour le bot")
     async def suggest(self, interaction: discord.Interaction, suggestion: str):
