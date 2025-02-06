@@ -9,6 +9,7 @@ import asyncio
 import sys
 import traceback
 import aiohttp
+import time
 
 # Configuration
 load_dotenv()
@@ -406,42 +407,61 @@ Download last 200 videos
             )
 
     @app_commands.command(name="download", description="Download media files")
-    @app_commands.describe(
-        type="Type of media to download",
-        number="Number of messages to scan"
-    )
     @app_commands.choices(
         type=[
-            app_commands.Choice(name="📁 All Files", value="all"),
             app_commands.Choice(name="📷 Images", value="images"),
-            app_commands.Choice(name="🎥 Videos", value="videos")
+            app_commands.Choice(name="🎥 Videos", value="videos"),
+            app_commands.Choice(name="📁 All Files", value="all")
         ],
         number=[
             app_commands.Choice(name="50 messages", value=50),
             app_commands.Choice(name="100 messages", value=100),
             app_commands.Choice(name="500 messages", value=500),
-            app_commands.Choice(name="All messages", value=-1)
+            app_commands.Choice(name="All messages", value=None)
         ]
     )
-    async def download_media(self, interaction: discord.Interaction, 
-                           type: app_commands.Choice[str],
-                           number: app_commands.Choice[int]):
-        await interaction.response.defer()
-
+    async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
         try:
+            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
+            status_message = await interaction.original_response()
+
+            # Correction de la conversion du type
+            type_key = {
+                'images': '📷 images',
+                'videos': '🎥 videos',
+                'all': '📁 all'
+            }.get(type.value)
+
+            # Correction de la gestion du nombre de messages
+            limit = number.value  # Plus besoin de conversion car déjà None ou int
+            
             media_files = []
             total_size = 0
-            processed = 0
+            processed_messages = 0
+            start_time = time.time()
             
-            async for msg in interaction.channel.history(limit=number.value):
-                processed += 1
-                for attachment in msg.attachments:
-                    if self._is_valid_type(attachment.filename, type.value):
-                        media_files.append(attachment)
-                        total_size += attachment.size
+            async with interaction.channel.typing():
+                async for message in interaction.channel.history(limit=limit):
+                    if time.time() - start_time > 60:
+                        await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
+                        return
+
+                    processed_messages += 1
+                    if processed_messages % 50 == 0:
+                        await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
+                    
+                    try:
+                        for attachment in message.attachments:
+                            if self._is_valid_type(attachment.filename, type_key):
+                                media_files.append(attachment)
+                                total_size += attachment.size
+                    
+                    except Exception as e:
+                        print(f"Erreur lors de l'analyse d'un message: {e}")
+                        continue
 
             if not media_files:
-                await interaction.followup.send(f"No {type.value} files found in the last {number.value} messages.")
+                await status_message.edit(content=f"❌ Aucun fichier trouvé dans les {processed_messages} derniers messages.")
                 return
 
             # Create download scripts
@@ -456,7 +476,7 @@ Download last 200 videos
 
             # Send scripts to thread
             await thread.send(
-                f"Found {len(media_files)} files in {processed} messages.\n"
+                f"Found {len(media_files)} files in {processed_messages} messages.\n"
                 f"Total size: {self._format_size(total_size)}",
                 files=[
                     discord.File(io.StringIO(batch_content), "download.bat"),
