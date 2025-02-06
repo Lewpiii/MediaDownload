@@ -170,18 +170,16 @@ class MediaDownload(commands.Bot):
                 # Startup message
                 startup_embed = discord.Embed(
                     title="🟢 Bot Online",
-                    description="Bot has successfully started\n━━━━━━━━━━━━━━━━━━━━━━",
+                    description="Bot has successfully started",
                     color=0x2ecc71,
                     timestamp=datetime.now()
                 )
                 startup_embed.add_field(
                     name="Status",
-                    value=f"""
-                    **Servers:** {len(self.guilds)}
-                    **Users:** {sum(g.member_count for g in self.guilds)}
-                    **Start Time:** {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}
-                    ━━━━━━━━━━━━━━━━
-                    """,
+                    value=f"""**Servers:** {len(self.guilds)}
+**Users:** {sum(g.member_count for g in self.guilds)}
+**Start Time:** {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}
+━━━━━━━━━━━━━━━━""",
                     inline=False
                 )
                 await self.logs_channel.send(embed=startup_embed)
@@ -413,12 +411,26 @@ class DownloadCog(commands.Cog):
 
     @app_commands.command(name="download", description="Download media files")
     @app_commands.describe(
-        type="Type of media to download (images, videos, all)",
+        type="Type of media to download",
         number="Number of messages to scan"
     )
+    @app_commands.choices(
+        type=[
+            app_commands.Choice(name="📁 All Files", value="all"),
+            app_commands.Choice(name="📷 Images", value="images"),
+            app_commands.Choice(name="🎥 Videos", value="videos")
+        ],
+        number=[
+            app_commands.Choice(name="50 messages", value=50),
+            app_commands.Choice(name="100 messages", value=100),
+            app_commands.Choice(name="200 messages", value=200),
+            app_commands.Choice(name="500 messages", value=500),
+            app_commands.Choice(name="All messages", value=-1)
+        ]
+    )
     async def download_media(self, interaction: discord.Interaction, 
-                           type: str = "all",
-                           number: int = 50):
+                           type: app_commands.Choice[str],
+                           number: app_commands.Choice[int]):
         await interaction.response.defer()
 
         try:
@@ -426,15 +438,15 @@ class DownloadCog(commands.Cog):
             total_size = 0
             processed = 0
             
-            async for msg in interaction.channel.history(limit=number):
+            async for msg in interaction.channel.history(limit=number.value):
                 processed += 1
                 for attachment in msg.attachments:
-                    if self._is_valid_type(attachment.filename, type):
+                    if self._is_valid_type(attachment.filename, type.value):
                         media_files.append(attachment)
                         total_size += attachment.size
 
             if not media_files:
-                await interaction.followup.send(f"No {type} files found in the last {number} messages.")
+                await interaction.followup.send(f"No {type.value} files found in the last {number.value} messages.")
                 return
 
             # Create download scripts
@@ -443,7 +455,7 @@ class DownloadCog(commands.Cog):
 
             # Create thread for downloads
             thread = await interaction.channel.create_thread(
-                name=f"📥 Download {type} ({len(media_files)} files)",
+                name=f"📥 Download {type.value} ({len(media_files)} files)",
                 type=discord.ChannelType.public_thread
             )
 
@@ -460,7 +472,7 @@ class DownloadCog(commands.Cog):
             # Update stats
             self.bot.download_count += 1
             self.bot.successful_downloads += 1
-            self.bot.downloads_by_type[type] += 1
+            self.bot.downloads_by_type[type.value] += 1
 
             await interaction.followup.send(f"Download ready in {thread.mention}")
 
@@ -472,7 +484,21 @@ class DownloadCog(commands.Cog):
                 await self.bot.logs_channel.send(f"Error in download command: {str(e)}")
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
-    async def suggest(self, interaction: discord.Interaction, suggestion: str):
+    @app_commands.describe(
+        category="Category of the suggestion",
+        suggestion="Your suggestion for the bot"
+    )
+    @app_commands.choices(
+        category=[
+            app_commands.Choice(name="⚙️ Feature", value="feature"),
+            app_commands.Choice(name="🎨 Design", value="design"),
+            app_commands.Choice(name="🛠️ Improvement", value="improvement"),
+            app_commands.Choice(name="🔧 Other", value="other")
+        ]
+    )
+    async def suggest(self, interaction: discord.Interaction,
+                     category: app_commands.Choice[str],
+                     suggestion: str):
         try:
             if self.bot.logs_channel:
                 embed = discord.Embed(
@@ -508,7 +534,20 @@ class DownloadCog(commands.Cog):
             await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="bug", description="Report a bug")
-    async def bug(self, interaction: discord.Interaction, description: str):
+    @app_commands.describe(
+        severity="Severity of the bug",
+        description="Detailed description of the bug"
+    )
+    @app_commands.choices(
+        severity=[
+            app_commands.Choice(name="🟢 Low - Minor issue", value="low"),
+            app_commands.Choice(name="🟡 Medium - Affects functionality", value="medium"),
+            app_commands.Choice(name="🔴 High - Critical issue", value="high")
+        ]
+    )
+    async def bug(self, interaction: discord.Interaction, 
+                 severity: app_commands.Choice[str],
+                 description: str):
         try:
             if self.bot.logs_channel:
                 embed = discord.Embed(
