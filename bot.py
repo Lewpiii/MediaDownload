@@ -619,28 +619,134 @@ Download last 200 videos
         return f"{size:.2f} TB"
 
     def _create_batch_script(self, media_files):
-        """Create Windows batch download script"""
+        """Create Windows batch download script with automatic folder organization"""
         script = "@echo off\n"
         script += "cd %USERPROFILE%\\Desktop\n"
         script += "mkdir MediaDownload 2>nul\n"
         script += "cd MediaDownload\n\n"
         
+        # Créer les dossiers principaux
+        script += "mkdir Images 2>nul\n"
+        script += "mkdir Videos 2>nul\n\n"
+        
+        # Organiser les fichiers par type et nom
+        organized_files = {}
         for attachment in media_files:
-            safe_filename = attachment.filename.replace(" ", "_")
-            script += f'curl -L -o "{safe_filename}" "{attachment.url}"\n'
+            # Déterminer le type (image ou vidéo)
+            ext = os.path.splitext(attachment.filename.lower())[1]
+            file_type = "Images" if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'] else "Videos"
+            
+            # Extraire le nom du dossier à partir du nom du fichier
+            folder_name = None
+            filename_lower = attachment.filename.lower()
+            
+            # Liste des mots-clés pour la détection automatique des dossiers
+            keywords = {
+                'minecraft': 'Minecraft',
+                'valorant': 'Valorant',
+                'fortnite': 'Fortnite',
+                'csgo': 'CSGO',
+                'cs2': 'CS2',
+                'lol': 'LeagueOfLegends',
+                'league': 'LeagueOfLegends',
+                'apex': 'ApexLegends',
+                'rocket': 'RocketLeague',
+                'gta': 'GTA',
+                'cod': 'CallOfDuty',
+                'warzone': 'Warzone',
+                # Ajoutez d'autres mots-clés selon vos besoins
+            }
+            
+            # Chercher les mots-clés dans le nom du fichier
+            for keyword, folder in keywords.items():
+                if keyword in filename_lower:
+                    folder_name = folder
+                    break
+            
+            if not folder_name:
+                folder_name = "Others"
+            
+            # Créer la clé de classification
+            key = f"{file_type}/{folder_name}"
+            if key not in organized_files:
+                organized_files[key] = []
+            organized_files[key].append(attachment)
+        
+        # Créer les dossiers et télécharger les fichiers
+        for folder_path, files in organized_files.items():
+            main_type, subfolder = folder_path.split('/')
+            script += f"mkdir \"{main_type}\\{subfolder}\" 2>nul\n"
+            
+            for attachment in files:
+                safe_filename = attachment.filename.replace(" ", "_")
+                script += f'curl -L -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
+            script += "\n"
         
         return script
 
     def _create_shell_script(self, media_files):
-        """Create Linux/Mac shell download script"""
+        """Create Linux/Mac shell download script with automatic folder organization"""
         script = "#!/bin/bash\n"
         script += "cd ~/Desktop\n"
         script += "mkdir -p MediaDownload\n"
         script += "cd MediaDownload\n\n"
         
+        # Créer les dossiers principaux
+        script += "mkdir -p Images\n"
+        script += "mkdir -p Videos\n\n"
+        
+        # Organiser les fichiers par type et nom
+        organized_files = {}
         for attachment in media_files:
-            safe_filename = attachment.filename.replace(" ", "_")
-            script += f'curl -L -o "{safe_filename}" "{attachment.url}"\n'
+            # Déterminer le type (image ou vidéo)
+            ext = os.path.splitext(attachment.filename.lower())[1]
+            file_type = "Images" if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'] else "Videos"
+            
+            # Extraire le nom du dossier à partir du nom du fichier
+            folder_name = None
+            filename_lower = attachment.filename.lower()
+            
+            # Liste des mots-clés pour la détection automatique des dossiers
+            keywords = {
+                'minecraft': 'Minecraft',
+                'valorant': 'Valorant',
+                'fortnite': 'Fortnite',
+                'csgo': 'CSGO',
+                'cs2': 'CS2',
+                'lol': 'LeagueOfLegends',
+                'league': 'LeagueOfLegends',
+                'apex': 'ApexLegends',
+                'rocket': 'RocketLeague',
+                'gta': 'GTA',
+                'cod': 'CallOfDuty',
+                'warzone': 'Warzone',
+                # Ajoutez d'autres mots-clés selon vos besoins
+            }
+            
+            # Chercher les mots-clés dans le nom du fichier
+            for keyword, folder in keywords.items():
+                if keyword in filename_lower:
+                    folder_name = folder
+                    break
+            
+            if not folder_name:
+                folder_name = "Others"
+            
+            # Créer la clé de classification
+            key = f"{file_type}/{folder_name}"
+            if key not in organized_files:
+                organized_files[key] = []
+            organized_files[key].append(attachment)
+        
+        # Créer les dossiers et télécharger les fichiers
+        for folder_path, files in organized_files.items():
+            main_type, subfolder = folder_path.split('/')
+            script += f'mkdir -p "{main_type}/{subfolder}"\n'
+            
+            for attachment in files:
+                safe_filename = attachment.filename.replace(" ", "_")
+                script += f'curl -L -o "{main_type}/{subfolder}/{safe_filename}" "{attachment.url}"\n'
+            script += "\n"
         
         return script
 
