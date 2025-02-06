@@ -119,40 +119,55 @@ class MediaDownload(commands.Bot):
         """Bot startup logging with consistent styling"""
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
-
+        
         if LOGS_CHANNEL_ID:
-            try:
-                self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
-                if self.logs_channel:
-                    # Check for downtime
-                    try:
-                        with open('last_heartbeat.txt', 'r') as f:
-                            last_heartbeat = datetime.fromisoformat(f.read().strip())
-                            downtime = datetime.now() - last_heartbeat
-                            if downtime.total_seconds() > self.alert_threshold:
-                                await self.log_event(
-                                    "🔄 Service Recovered",
-                                    "Bot was down and has recovered",
-                                    0xf1c40f,
-                                    Downtime=str(downtime).split('.')[0],
-                                    "Last Seen"=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S")
-                                )
-                    except FileNotFoundError:
-                        pass  # First bot startup
+            self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
+            if self.logs_channel:
+                try:
+                    with open('last_heartbeat.txt', 'r') as f:
+                        last_heartbeat = datetime.fromisoformat(f.read().strip())
+                        downtime = datetime.now() - last_heartbeat
+                        if downtime.total_seconds() > self.alert_threshold:
+                            embed = discord.Embed(
+                                title="🔄 Service Recovered",
+                                description="Bot was down and has recovered\n━━━━━━━━━━━━━━━━━━━━━━",
+                                color=0xf1c40f,
+                                timestamp=datetime.now()
+                            )
+                            embed.add_field(
+                                name="Downtime",
+                                value=str(downtime).split('.')[0],
+                                inline=False
+                            )
+                            embed.add_field(
+                                name="Last Seen",
+                                value=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S"),
+                                inline=False
+                            )
+                            await self.logs_channel.send(embed=embed)
+                except FileNotFoundError:
+                    pass  # First bot startup
 
-                    # Startup message
-                    await self.log_event(
-                        "🟢 Service Started",
-                        "Bot is now online and operational",
-                        0x2ecc71,
-                        Environment="```\nRender Starter```",
-                        Version=f"Discord.py {discord.__version__}",
-                        "Start Time"=self.start_time.strftime("%Y-%m-%d %H:%M:%S")
-                    )
-                else:
-                    print("❌ Logs channel not found!")
-            except Exception as e:
-                print(f"❌ Error in on_ready: {e}")
+                # Startup message
+                startup_embed = discord.Embed(
+                    title="🟢 Bot Online",
+                    description="Bot has successfully started\n━━━━━━━━━━━━━━━━━━━━━━",
+                    color=0x2ecc71,
+                    timestamp=datetime.now()
+                )
+                startup_embed.add_field(
+                    name="Status",
+                    value=f"""
+                    **Servers:** {len(self.guilds)}
+                    **Users:** {sum(g.member_count for g in self.guilds)}
+                    **Start Time:** {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}
+                    ━━━━━━━━━━━━━━━━
+                    """,
+                    inline=False
+                )
+                await self.logs_channel.send(embed=startup_embed)
+            else:
+                print("❌ Logs channel not found!")
 
     async def on_guild_join(self, guild):
         """Server join logging with consistent styling"""
