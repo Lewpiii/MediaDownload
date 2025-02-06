@@ -83,7 +83,8 @@ class MediaDownload(commands.Bot):
     async def setup_hook(self):
         try:
             await self.add_cog(DownloadCog(self))
-            print("✅ DownloadCog chargé avec succès!")
+            await self.add_cog(UtilsCog(self))
+            print("✅ Cogs chargés avec succès!")
             
             # Synchronisation des commandes
             await self.tree.sync()
@@ -373,6 +374,9 @@ class DownloadCog(commands.Cog):
         self.bot = bot
         self.color = 0x2ecc71
         self.downloads_in_progress = {}
+        self.download_count = 0  # Compteur de téléchargements
+        self.successful_downloads = 0  # Téléchargements réussis
+        self.failed_downloads = 0  # Téléchargements échoués
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -564,10 +568,13 @@ class DownloadCog(commands.Cog):
                 )
                 await status_message.edit(content=None, embed=embed_status)
 
+                await self.increment_stats(success=True, platform='tiktok')
+
             except Exception as e:
                 await status_message.edit(content=f"❌ Error: {str(e)}")
                 if 'thread' in locals():
                     await thread.delete()
+                await self.increment_stats(success=False, platform='tiktok')
 
         except Exception as e:
             print(f"Erreur dans download_media: {e}")
@@ -675,28 +682,162 @@ class DownloadCog(commands.Cog):
             size_bytes /= 1024
         return f"{size_bytes:.2f} TB"
 
-    @app_commands.command(name="stats", description="Show bot statistics")
+    @app_commands.command(name="stats", description="Affiche les statistiques de téléchargement")
     async def stats(self, interaction: discord.Interaction):
-        total_users = sum(g.member_count for g in self.bot.guilds)
-        uptime = datetime.now() - self.bot.start_time
-        
-        embed = discord.Embed(
-            title="📊 Bot Statistics",
-            color=self.color
-        )
-        
-        embed.add_field(
-            name="📈 General",
-            value=(
-                f"**Servers:** {len(self.bot.guilds)}\n"
-                f"**Users:** {total_users:,}\n"
-                f"**Uptime:** {str(uptime).split('.')[0]}\n"
-                f"**Latency:** {round(self.bot.latency * 1000)}ms"
-            ),
-            inline=False
-        )
-        
-        await interaction.response.send_message(embed=embed)
+        try:
+            embed = discord.Embed(
+                title="📊 Statistiques de Téléchargement",
+                color=0x2ecc71,
+                timestamp=datetime.now()
+            )
+            
+            # Calcul du taux de réussite
+            if self.download_count > 0:
+                success_rate = (self.successful_downloads / self.download_count) * 100
+            else:
+                success_rate = 0
+
+            embed.add_field(
+                name="📈 Téléchargements",
+                value=f"""
+                **Total:** {self.download_count}
+                **Réussis:** {self.successful_downloads}
+                **Échoués:** {self.failed_downloads}
+                **Taux de réussite:** {success_rate:.1f}%
+                """,
+                inline=False
+            )
+
+            # Ajouter cette partie si vous voulez suivre les téléchargements par type
+            embed.add_field(
+                name="📊 Par Type",
+                value=f"""
+                **TikTok:** {getattr(self, 'tiktok_downloads', 0)}
+                **Instagram:** {getattr(self, 'instagram_downloads', 0)}
+                **YouTube:** {getattr(self, 'youtube_downloads', 0)}
+                """,
+                inline=True
+            )
+
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            await self.bot.log_event("❌ Error", f"Error in stats command: {str(e)}", 0xe74c3c)
+            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+
+    async def increment_stats(self, success=True, platform=None):
+        self.download_count += 1
+        if success:
+            self.successful_downloads += 1
+        else:
+            self.failed_downloads += 1
+            
+        # Incrémenter les compteurs par plateforme
+        if platform == 'tiktok':
+            self.tiktok_downloads = getattr(self, 'tiktok_downloads', 0) + 1
+        elif platform == 'instagram':
+            self.instagram_downloads = getattr(self, 'instagram_downloads', 0) + 1
+        elif platform == 'youtube':
+            self.youtube_downloads = getattr(self, 'youtube_downloads', 0) + 1
+
+class UtilsCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="botinfo", description="Affiche les informations système du bot")
+    async def botinfo(self, interaction: discord.Interaction):
+        try:
+            total_users = sum(g.member_count for g in self.bot.guilds)
+            total_channels = sum(len(g.channels) for g in self.bot.guilds)
+            
+            embed = discord.Embed(
+                title="ℹ️ Informations du Bot",
+                color=0x3498db,
+                timestamp=datetime.now()
+            )
+            
+            embed.add_field(
+                name="📈 Général",
+                value=f"""
+                **Serveurs:** {len(self.bot.guilds)}
+                **Utilisateurs:** {total_users:,}
+                **Canaux:** {total_channels:,}
+                """,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="⚙️ Performance",
+                value=f"""
+                **Latence:** {round(self.bot.latency * 1000)}ms
+                **Uptime:** {str(datetime.now() - self.bot.start_time).split('.')[0]}
+                **Version:** {discord.__version__}
+                """,
+                inline=True
+            )
+            
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            await self.bot.log_event("❌ Error", f"Error in botinfo command: {str(e)}", 0xe74c3c)
+            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+
+    @app_commands.command(name="suggest", description="Soumettre une suggestion pour le bot")
+    async def suggest(self, interaction: discord.Interaction, suggestion: str):
+        try:
+            if self.bot.logs_channel:
+                embed = discord.Embed(
+                    title="💡 Nouvelle Suggestion",
+                    description=suggestion,
+                    color=0xf1c40f,
+                    timestamp=datetime.now()
+                )
+                embed.add_field(
+                    name="Auteur",
+                    value=f"{interaction.user.mention} ({interaction.user.id})",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Serveur",
+                    value=f"{interaction.guild.name} ({interaction.guild.id})",
+                    inline=True
+                )
+                msg = await self.bot.logs_channel.send(embed=embed)
+                await msg.add_reaction("👍")
+                await msg.add_reaction("👎")
+                
+                await interaction.response.send_message("✅ Suggestion envoyée avec succès!", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Le système de suggestions n'est pas configuré.", ephemeral=True)
+        except Exception as e:
+            await self.bot.log_event("❌ Error", f"Error in suggest command: {str(e)}", 0xe74c3c)
+            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+
+    @app_commands.command(name="bug", description="Signaler un bug")
+    async def report_bug(self, interaction: discord.Interaction, description: str):
+        try:
+            if self.bot.logs_channel:
+                embed = discord.Embed(
+                    title="🐛 Rapport de Bug",
+                    description=description,
+                    color=0xe74c3c,
+                    timestamp=datetime.now()
+                )
+                embed.add_field(
+                    name="Rapporteur",
+                    value=f"{interaction.user.mention} ({interaction.user.id})",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Serveur",
+                    value=f"{interaction.guild.name} ({interaction.guild.id})",
+                    inline=True
+                )
+                await self.bot.logs_channel.send(embed=embed)
+                await interaction.response.send_message("✅ Bug signalé avec succès!", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Le système de rapport de bugs n'est pas configuré.", ephemeral=True)
+        except Exception as e:
+            await self.bot.log_event("❌ Error", f"Error in bug command: {str(e)}", 0xe74c3c)
+            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
 
 async def main():
     try:
