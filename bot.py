@@ -425,12 +425,12 @@ Download last 200 videos
             await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
             status_message = await interaction.original_response()
 
+            # Debug pour vérifier les valeurs
+            print(f"Type sélectionné: {type.value}")
+            print(f"Nombre de messages: {number.value}")
+
             # Conversion du type
-            type_key = {
-                'images': '📷 images',
-                'videos': '🎥 videos',
-                'all': '📁 all'
-            }.get(type.value)
+            type_key = type.value  # Utilisation directe de la valeur
 
             # Gestion du nombre de messages
             limit = None if number.value == 999999 else number.value
@@ -452,7 +452,23 @@ Download last 200 videos
                     
                     try:
                         for attachment in message.attachments:
-                            if self._is_valid_type(attachment.filename, type_key):
+                            # Debug pour voir les fichiers trouvés
+                            print(f"Vérification du fichier: {attachment.filename}")
+                            
+                            # Vérification du type de fichier
+                            ext = os.path.splitext(attachment.filename.lower())[1]
+                            valid = False
+
+                            if type_key == "images" and ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
+                                valid = True
+                            elif type_key == "videos" and ext in ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv']:
+                                valid = True
+                            elif type_key == "all":
+                                valid = ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', 
+                                              '.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv']
+
+                            if valid:
+                                print(f"Fichier valide trouvé: {attachment.filename}")
                                 media_files.append(attachment)
                                 total_size += attachment.size
                     
@@ -461,7 +477,7 @@ Download last 200 videos
                         continue
 
             if not media_files:
-                await status_message.edit(content=f"❌ Aucun fichier trouvé dans les {processed_messages} derniers messages.")
+                await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
                 return
 
             # Create download scripts
@@ -470,7 +486,7 @@ Download last 200 videos
 
             # Create thread for downloads
             thread = await interaction.channel.create_thread(
-                name=f"📥 Download {type.value} ({len(media_files)} files)",
+                name=f"📥 Download {type_key} ({len(media_files)} files)",
                 type=discord.ChannelType.public_thread
             )
 
@@ -484,19 +500,11 @@ Download last 200 videos
                 ]
             )
 
-            # Update stats
-            self.bot.download_count += 1
-            self.bot.successful_downloads += 1
-            self.bot.downloads_by_type[type.value] += 1
-
-            await interaction.followup.send(f"Download ready in {thread.mention}")
+            await status_message.edit(content=f"✅ Download ready in {thread.mention}")
 
         except Exception as e:
-            self.bot.download_count += 1
-            self.bot.failed_downloads += 1
-            await interaction.followup.send(f"An error occurred: {str(e)}")
-            if self.bot.logs_channel:
-                await self.bot.logs_channel.send(f"Error in download command: {str(e)}")
+            print(f"Erreur dans download_media: {e}")
+            await interaction.followup.send(f"❌ Une erreur est survenue: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
