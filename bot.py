@@ -170,35 +170,48 @@ class MediaDownload(commands.Bot):
                 print("❌ Logs channel not found!")
 
     async def on_guild_join(self, guild):
-        """Server join logging with consistent styling"""
         if self.logs_channel:
-            await self.log_event(
-                "🎉 Bot Added to New Server",
-                f"Bot has been added to {guild.name}",
-                0x2ecc71,
-                "Server Info"=f"""
+            embed = discord.Embed(
+                title="✨ New Server",
+                description=f"Bot has been added to a new server\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=0x2ecc71,
+                timestamp=datetime.now()
+            )
+            embed.add_field(
+                name="Server Info",
+                value=f"""
                 **Name:** {guild.name}
                 **ID:** {guild.id}
                 **Owner:** {guild.owner}
                 **Members:** {guild.member_count}
                 **Created:** <t:{int(guild.created_at.timestamp())}:R>
+                ━━━━━━━━━━━━━━━━
                 """,
-                Icon=guild.icon.url if guild.icon else "No icon"
+                inline=False
             )
+            if guild.icon:
+                embed.set_thumbnail(url=guild.icon.url)
+            await self.logs_channel.send(embed=embed)
 
     async def on_guild_remove(self, guild):
-        """Server leave logging with consistent styling"""
         if self.logs_channel:
-            await self.log_event(
-                "❌ Bot Removed from Server",
-                f"Bot has been removed from {guild.name}",
-                0xe74c3c,
-                "Server Info"=f"""
+            embed = discord.Embed(
+                title="❌ Server Removed",
+                description=f"Bot has been removed from a server\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=0xe74c3c,
+                timestamp=datetime.now()
+            )
+            embed.add_field(
+                name="Server Info",
+                value=f"""
                 **Name:** {guild.name}
                 **ID:** {guild.id}
                 **Members:** {guild.member_count}
-                """
+                ━━━━━━━━━━━━━━━━
+                """,
+                inline=False
             )
+            await self.logs_channel.send(embed=embed)
 
     async def send_error_log(self, context: str, error: Exception):
         """Error logging with consistent styling"""
