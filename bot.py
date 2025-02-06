@@ -72,12 +72,13 @@ class MediaDownload(commands.Bot):
         self.last_heartbeat = None
         self.alert_threshold = 60  # Seuil d'alerte en secondes
         
-        # Suppression des GIFs des types de médias
+        # Définition des types de médias avec les emojis
         self.media_types = {
             '📷 images': ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'],
             '🎥 videos': ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv'],
             '📁 all': []
         }
+        # Remplir la liste 'all' avec toutes les extensions
         self.media_types['📁 all'] = [ext for types in self.media_types.values() for ext in types]
 
     async def setup_hook(self):
@@ -102,104 +103,80 @@ class MediaDownload(commands.Bot):
             print(f"❌ Erreur lors de l'initialisation: {e}")
 
     async def on_ready(self):
+        """Bot startup logging with consistent styling"""
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
 
-        # Initialiser le canal de logs
         if LOGS_CHANNEL_ID:
             try:
                 self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
-                print(f"Looking for logs channel: {LOGS_CHANNEL_ID}")
                 if self.logs_channel:
-                    print("✅ Logs channel found!")
-                    
-                    # Vérifier si le bot était down
+                    # Check for downtime
                     try:
                         with open('last_heartbeat.txt', 'r') as f:
                             last_heartbeat = datetime.fromisoformat(f.read().strip())
                             downtime = datetime.now() - last_heartbeat
                             if downtime.total_seconds() > self.alert_threshold:
-                                embed = discord.Embed(
-                                    title="🔄 Service Recovered",
-                                    description="Bot was down and has recovered",
-                                    color=0xf1c40f,
-                                    timestamp=datetime.now()
+                                await self.log_event(
+                                    "🔄 Service Recovered",
+                                    "Bot was down and has recovered",
+                                    0xf1c40f,
+                                    Downtime=str(downtime).split('.')[0],
+                                    "Last Seen"=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S")
                                 )
-                                embed.add_field(
-                                    name="Downtime Duration",
-                                    value=str(downtime).split('.')[0],
-                                    inline=True
-                                )
-                                embed.add_field(
-                                    name="Last Seen",
-                                    value=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S"),
-                                    inline=True
-                                )
-                                await self.logs_channel.send(embed=embed)
                     except FileNotFoundError:
-                        pass  # Premier démarrage du bot
+                        pass  # First bot startup
 
-                    # Message normal de démarrage
-                    embed = discord.Embed(
-                        title="🟢 Service Started",
-                        description="Bot is now online and operational",
-                        color=0x2ecc71,
-                        timestamp=datetime.now()
+                    # Startup message
+                    await self.log_event(
+                        "🟢 Service Started",
+                        "Bot is now online and operational",
+                        0x2ecc71,
+                        Environment="```\nRender Starter```",
+                        Version=f"Discord.py {discord.__version__}",
+                        "Start Time"=self.start_time.strftime("%Y-%m-%d %H:%M:%S")
                     )
-                    embed.add_field(
-                        name="Environment",
-                        value="```\nRender Starter```",
-                        inline=False
-                    )
-                    embed.add_field(
-                        name="Version",
-                        value=f"Discord.py {discord.__version__}",
-                        inline=True
-                    )
-                    embed.add_field(
-                        name="Start Time",
-                        value=self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                        inline=True
-                    )
-                    await self.logs_channel.send(embed=embed)
                 else:
                     print("❌ Logs channel not found!")
-                    print(f"Available channels: {[channel.name for channel in self.get_all_channels()]}")
             except Exception as e:
-                print(f"❌ Error in on_ready while setting up logs: {str(e)}")
-                print(f"Full error: {traceback.format_exc()}")
+                print(f"❌ Error in on_ready: {e}")
 
-    async def send_error_log(self, context, error):
-        """Envoie un message d'erreur détaillé dans le canal de logs"""
+    async def log_event(self, title: str, description: str, color: int, **fields):
+        """Unified logging system with consistent styling"""
         if self.logs_channel:
-            embed = discord.Embed(
-                title="⚠️ Error Occurred",
-                description=f"An error occurred in {context}",
-                color=0xe74c3c,
-                timestamp=datetime.now()
-            )
-            
-            # Obtenir le traceback complet
+            try:
+                embed = discord.Embed(
+                    title=title,
+                    description=f"{description}\n━━━━━━━━━━━━━━━━━━━━━━",
+                    color=color,
+                    timestamp=datetime.now()
+                )
+
+                # Add all additional fields
+                for name, value in fields.items():
+                    embed.add_field(
+                        name=name,
+                        value=f"{value}\n━━━━━━━━━━━━━━━━",
+                        inline=False
+                    )
+
+                await self.logs_channel.send(embed=embed)
+            except Exception as e:
+                print(f"Error in logging system: {e}")
+
+    async def send_error_log(self, context: str, error: Exception):
+        """Error logging with consistent styling"""
+        if self.logs_channel:
             error_traceback = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
             
-            # Ajouter les détails de l'erreur
-            embed.add_field(
-                name="Error Type",
-                value=f"`{type(error).__name__}`",
-                inline=False
+            await self.log_event(
+                "⚠️ Error Occurred",
+                f"An error occurred in {context}",
+                0xe74c3c,
+                "Error Type"=f"`{type(error).__name__}`",
+                "Error Message"=f"```py\n{str(error)}\n```",
+                Traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
-            embed.add_field(
-                name="Error Message",
-                value=f"```py\n{str(error)}\n```",
-                inline=False
-            )
-            embed.add_field(
-                name="Traceback",
-                value=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```",
-                inline=False
-            )
-            
-            await self.logs_channel.send(embed=embed)
 
     async def change_status(self):
         """Enhanced dynamic status system"""
@@ -242,76 +219,51 @@ class MediaDownload(commands.Bot):
                 await asyncio.sleep(20)
 
     async def heartbeat(self):
-        """Envoie un signal périodique pour indiquer que le bot est en vie"""
+        """Heartbeat monitoring with consistent styling"""
         while not self.is_closed():
             try:
                 current_time = datetime.now()
                 self.last_heartbeat = current_time
                 
                 if self.logs_channel:
-                    # Stocker le timestamp du dernier heartbeat
+                    # Store last heartbeat
                     with open('last_heartbeat.txt', 'w') as f:
                         f.write(self.last_heartbeat.isoformat())
                     
-                    # Vérifier si le dernier heartbeat est trop ancien
+                    # Check for delays
                     if self.last_heartbeat:
                         time_since_last = (current_time - self.last_heartbeat).total_seconds()
                         if time_since_last > self.alert_threshold:
-                            embed = discord.Embed(
-                                title="⚠️ Service Alert",
-                                description="Bot is experiencing delays",
-                                color=0xff9900,
-                                timestamp=current_time
+                            await self.log_event(
+                                "⚠️ Service Alert",
+                                "Bot is experiencing delays",
+                                0xff9900,
+                                "Last Response"=f"{time_since_last:.1f} seconds ago",
+                                Status="Investigating"
                             )
-                            embed.add_field(
-                                name="Last Response",
-                                value=f"{time_since_last:.1f} seconds ago",
-                                inline=True
-                            )
-                            embed.add_field(
-                                name="Status",
-                                value="Investigating",
-                                inline=True
-                            )
-                            await self.logs_channel.send(embed=embed)
                 
-                await asyncio.sleep(30)  # Vérification toutes les 30 secondes
+                await asyncio.sleep(30)
             except Exception as e:
                 print(f"Error in heartbeat: {e}")
                 if self.logs_channel:
-                    try:
-                        embed = discord.Embed(
-                            title="🔴 Heartbeat Error",
-                            description="Error in heartbeat monitoring",
-                            color=0xe74c3c,
-                            timestamp=datetime.now()
-                        )
-                        embed.add_field(
-                            name="Error",
-                            value=f"```{str(e)}```",
-                            inline=False
-                        )
-                        await self.logs_channel.send(embed=embed)
-                    except:
-                        pass
+                    await self.log_event(
+                        "🔴 Heartbeat Error",
+                        "Error in heartbeat monitoring",
+                        0xe74c3c,
+                        Error=f"```{str(e)}```"
+                    )
                 await asyncio.sleep(30)
 
     async def close(self):
         if self.logs_channel:
             try:
                 uptime = datetime.now() - self.start_time
-                embed = discord.Embed(
-                    title="🔴 Service Stopped",
-                    description="Bot is shutting down",
-                    color=0xe74c3c,
-                    timestamp=datetime.now()
+                await self.log_event(
+                    "🔴 Service Stopped",
+                    "Bot is shutting down",
+                    0xe74c3c,
+                    Uptime=str(uptime).split('.')[0]
                 )
-                embed.add_field(
-                    name="Uptime",
-                    value=str(uptime).split('.')[0],
-                    inline=True
-                )
-                await self.logs_channel.send(embed=embed)
             except:
                 pass
         if self.status_update_task:
@@ -345,53 +297,43 @@ class MediaDownload(commands.Bot):
         await self.process_commands(message)
 
     async def on_guild_join(self, guild):
-        """Quand le bot rejoint un nouveau serveur"""
+        """Server join logging with consistent styling"""
         if self.logs_channel:
-            embed = discord.Embed(
-                title="🎉 Bot Added to New Server",
-                description=f"Bot has been added to {guild.name}",
-                color=0x2ecc71,
-                timestamp=datetime.now()
-            )
-            embed.add_field(
-                name="Server Info",
-                value=f"""
+            await self.log_event(
+                "🎉 Bot Added to New Server",
+                f"Bot has been added to {guild.name}",
+                0x2ecc71,
+                "Server Info"=f"""
                 **Name:** {guild.name}
                 **ID:** {guild.id}
                 **Owner:** {guild.owner}
                 **Members:** {guild.member_count}
                 **Created:** <t:{int(guild.created_at.timestamp())}:R>
                 """,
-                inline=False
+                Icon=guild.icon.url if guild.icon else "No icon"
             )
-            if guild.icon:
-                embed.set_thumbnail(url=guild.icon.url)
-            await self.logs_channel.send(embed=embed)
 
     async def on_guild_remove(self, guild):
-        """Quand le bot est retiré d'un serveur"""
+        """Server leave logging with consistent styling"""
         if self.logs_channel:
-            embed = discord.Embed(
-                title="❌ Bot Removed from Server",
-                description=f"Bot has been removed from {guild.name}",
-                color=0xe74c3c,
-                timestamp=datetime.now()
-            )
-            embed.add_field(
-                name="Server Info",
-                value=f"""
+            await self.log_event(
+                "❌ Bot Removed from Server",
+                f"Bot has been removed from {guild.name}",
+                0xe74c3c,
+                "Server Info"=f"""
                 **Name:** {guild.name}
                 **ID:** {guild.id}
                 **Members:** {guild.member_count}
-                """,
-                inline=False
+                """
             )
-            await self.logs_channel.send(embed=embed)
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.color = 0x2ecc71
+        self.color = 0x3498db  # Main blue color
+        self.error_color = 0xe74c3c  # Error red
+        self.success_color = 0x2ecc71  # Success green
+        self.warning_color = 0xf1c40f  # Warning yellow
         self.downloads_in_progress = {}
         self.download_count = 0  # Total downloads
         self.successful_downloads = 0  # Successful downloads
@@ -473,96 +415,57 @@ class DownloadCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="download", description="Download media files")
-    @app_commands.checks.cooldown(1, 60)  # Limite : 1 utilisation toutes les 60 secondes
-    @app_commands.choices(
-        type=[
-            app_commands.Choice(name="📷 Images", value="images"),
-            app_commands.Choice(name="🎥 Videos", value="videos"),
-            app_commands.Choice(name="📁 All", value="all")
-        ],
-        number=[
-            app_commands.Choice(name="All", value="-1"),
-            app_commands.Choice(name="10", value="10"),
-            app_commands.Choice(name="50", value="50"),
-            app_commands.Choice(name="100", value="100"),
-            app_commands.Choice(name="500", value="500"),
-            app_commands.Choice(name="1000", value="1000")
-        ]
-    )
-    @app_commands.describe(
-        type="Type of media to download",
-        number="Number of messages to analyze"
-    )
-    async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[str]):
-        # Création de l'embed de progression
+    @app_commands.checks.cooldown(1, 60)
+    async def download_media(self, interaction: discord.Interaction, 
+        type: app_commands.Choice[str] = app_commands.Choice(name="📁 All", value="📁 all"),
+        number: app_commands.Choice[str] = app_commands.Choice(name="50", value="50")):
+        
+        # Initial progress embed
         progress_embed = discord.Embed(
             title="📥 Download Progress",
-            description="Initializing...",
+            description="Initializing download process...\n━━━━━━━━━━━━━━━━━━━━━━",
             color=self.color
         )
         await interaction.response.send_message(embed=progress_embed)
         message = await interaction.original_response()
 
         try:
-            # Configuration initiale
+            # Configuration
             limit = None if number.value == "-1" else int(number.value)
             media_files = []
             total_size = 0
             processed_messages = 0
             start_time = time.time()
             
-            # Barre de progression
-            progress_bar = "⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜"
+            # Debug
+            print(f"Type selected: {type.value}")
+            print(f"Media types available: {self.bot.media_types}")
             
             async with interaction.channel.typing():
                 async for msg in interaction.channel.history(limit=limit):
-                    if time.time() - start_time > 60:  # Timeout après 60 secondes
-                        error_embed = discord.Embed(
-                            title="⚠️ Timeout",
-                            description="Search took too long. Please try with fewer messages.",
-                            color=0xe74c3c
-                        )
-                        await message.edit(embed=error_embed)
-                        return
-
                     processed_messages += 1
-                    if processed_messages % 25 == 0:  # Update tous les 25 messages
-                        # Mise à jour de la barre de progression
-                        if limit:
-                            progress = min(int((processed_messages / limit) * 10), 10)
-                            progress_bar = "🟦" * progress + "⬜" * (10 - progress)
-                        
-                        progress_embed.description = f"""
-                        🔍 Scanning messages...
-                        {progress_bar}
-                        
-                        Messages scanned: {processed_messages}
-                        Files found: {len(media_files)}
-                        Total size: {self._format_size(total_size)}
-                        """
-                        await message.edit(embed=progress_embed)
                     
-                    # Analyse des attachements
+                    # Process attachments
                     for attachment in msg.attachments:
                         if self._is_valid_type(attachment.filename, type.value):
                             media_files.append(attachment)
                             total_size += attachment.size
 
-            # Message final
+            # No files found
             if not media_files:
-                final_embed = discord.Embed(
+                no_files_embed = discord.Embed(
                     title="❌ No Files Found",
-                    description=f"No {type.value} files found in this channel.",
-                    color=0xe74c3c
+                    description=f"No {type.value} files found in this channel.\n━━━━━━━━━━━━━━━━━━━━━━",
+                    color=self.error_color
                 )
-                await message.edit(embed=final_embed)
+                await message.edit(embed=no_files_embed)
                 return
 
-            # Création des scripts
+            # Create download scripts
             batch_content = self._create_batch_script(media_files)
             shell_content = self._create_shell_script(media_files)
 
-            # Création du thread
+            # Create thread
             thread_name = f"📥 Download {type.value}"
             if limit:
                 thread_name += f" ({limit} msgs, {len(media_files)} files)"
@@ -574,129 +477,202 @@ class DownloadCog(commands.Cog):
                 type=discord.ChannelType.public_thread
             )
 
-            # Message de succès
+            # Success message
             success_embed = discord.Embed(
-                title="✅ Download Ready!",
-                description=f"Download scripts are ready in {thread.mention}",
-                color=self.color
+                title="✅ Download Ready",
+                description=f"Download scripts are ready in {thread.mention}\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=self.success_color
             )
+            
             success_embed.add_field(
                 name="📊 Summary",
                 value=f"""
-                Messages scanned: {processed_messages}
-                Files found: {len(media_files)}
-                Total size: {self._format_size(total_size)}
-                Time taken: {time.time() - start_time:.1f}s
+                **Messages Scanned:** {processed_messages}
+                **Files Found:** {len(media_files)}
+                **Total Size:** {self._format_size(total_size)}
+                **Time Taken:** {time.time() - start_time:.1f}s
+                ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
             )
+            
+            success_embed.add_field(
+                name="📝 Instructions",
+                value=f"""
+                1. Download the script for your OS
+                2. Run it to download all files
+                3. Files will be organized by type
+                ━━━━━━━━━━━━━━━━
+                """,
+                inline=False
+            )
+            
             await message.edit(embed=success_embed)
 
-            # Mise à jour des statistiques
+            # Update stats
             await self.increment_stats(success=True, media_type=type.value)
 
         except Exception as e:
             error_embed = discord.Embed(
                 title="❌ Error",
-                description=f"An error occurred: {str(e)}",
-                color=0xe74c3c
+                description=f"An error occurred: {str(e)}\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=self.error_color
             )
             await message.edit(embed=error_embed)
             await self.increment_stats(success=False, media_type=type.value)
-            await self.bot.log_event("❌ Error", f"Error in download command: {str(e)}", 0xe74c3c)
+            await self.bot.log_event("❌ Error", f"Error in download command: {str(e)}", self.error_color)
 
     def _create_batch_script(self, media_files):
-        """Creates Windows batch script with automatic organization"""
+        """Creates Windows batch script with consistent styling"""
         script = "@echo off\n"
-        script += "echo 📥 Downloading and organizing files...\n"
+        script += "cls\n"
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        script += "echo           Media Downloader Bot\n"
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        script += "echo.\n"
         script += "cd %USERPROFILE%\\Desktop\n"
         script += "mkdir MediaDownload 2>nul\n"
         script += "cd MediaDownload\n"
+        
+        # Create dated folder
+        script += "set folder=%date:~6,4%-%date:~3,2%-%date:~0,2%_%time:~0,2%%time:~3,2%\n"
+        script += "mkdir \"%folder%\" 2>nul\n"
+        script += "cd \"%folder%\"\n"
+        
+        # Create type folders
         script += "mkdir Videos 2>nul\n"
-        script += "mkdir Images 2>nul\n\n"
-
-        # Group files by category
-        categories = {}
-        for attachment in media_files:
-            filename = attachment.filename.lower()
-            if any(filename.endswith(ext) for ext in ['.mp4', '.mov', '.webm']):
-                category = next((
-                    word.strip() for word in re.split(r'[-_\s]', filename)
-                    if word.strip() and not any(ext in word for ext in ['.mp4', '.mov', '.webm'])
-                ), 'others')
-                
-                if category not in categories:
-                    categories[category] = []
-                categories[category].append(attachment)
-
-        # Create folders and download files
+        script += "mkdir Images 2>nul\n"
+        
+        # Create info file
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ > info.txt\n"
+        script += "echo           Download Information >> info.txt\n"
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ >> info.txt\n"
+        script += f"echo Download Date: %date% %time% >> info.txt\n"
+        script += f"echo Total Files: {len(media_files)} >> info.txt\n"
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ >> info.txt\n"
+        script += "echo File List: >> info.txt\n"
+        
+        # Download with progress bar
         total_files = len(media_files)
-        current_file = 0
+        for i, attachment in enumerate(media_files, 1):
+            safe_filename = attachment.filename.replace(" ", "_")
+            ext = os.path.splitext(safe_filename)[1].lower()
+            
+            # Determine folder
+            folder = "Videos" if ext in ['.mp4', '.mov', '.webm'] else "Images"
+            
+            # Progress calculation
+            progress = int((i / total_files) * 20)
+            progress_bar = "█" * progress + "░" * (20 - progress)
+            
+            script += f'cls\n'
+            script += f'echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+            script += f'echo           Downloading Files\n'
+            script += f'echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+            script += f'echo.\n'
+            script += f'echo Progress: [{progress_bar}] {i}/{total_files}\n'
+            script += f'echo Current File: {safe_filename}\n'
+            script += f'echo.\n'
+            script += f'echo {safe_filename} >> info.txt\n'
+            script += f'curl -L -o "{folder}\\{safe_filename}" "{attachment.url}"\n'
+            script += 'if %errorlevel% neq 0 (\n'
+            script += '    echo [ERROR] Failed to download: %safe_filename% >> errors.txt\n'
+            script += ')\n'
 
-        for category, files in categories.items():
-            script += f'mkdir "Videos\\{category}" 2>nul\n'
-            for attachment in files:
-                current_file += 1
-                safe_filename = attachment.filename.replace(" ", "_")
-                script += f'echo [{current_file}/{total_files}] {safe_filename}\n'
-                script += f'curl -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
-
-        script += "\necho ✅ Download complete!\n"
-        script += "echo Files are organized in the MediaDownload folder on your desktop\n"
+        script += "\ncls\n"
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        script += "echo               Complete!\n"
+        script += "echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        script += "echo.\n"
+        script += "echo ✓ Download complete!\n"
+        script += "echo ✓ Files are organized in dated folders on your desktop\n"
+        script += "echo.\n"
         script += "explorer .\n"
         script += "pause"
         return script
 
     def _create_shell_script(self, media_files):
-        """Creates Linux/Mac shell script with automatic organization"""
-        script = "#!/bin/bash\n"
-        script += "echo '📥 Downloading and organizing files...'\n"
+        """Creates Linux/Mac shell script with consistent styling"""
+        script = "#!/bin/bash\n\n"
+        script += "clear\n"
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'\n"
+        script += "echo '          Media Downloader Bot'\n"
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'\n"
+        script += "echo\n"
         script += "cd ~/Desktop\n"
         script += "mkdir -p MediaDownload\n"
         script += "cd MediaDownload\n"
-        script += "mkdir -p Videos Images\n\n"
-
-        # Group files by category
-        categories = {}
-        for attachment in media_files:
-            filename = attachment.filename.lower()
-            if any(filename.endswith(ext) for ext in ['.mp4', '.mov', '.webm']):
-                category = next((
-                    word.strip() for word in re.split(r'[-_\s]', filename)
-                    if word.strip() and not any(ext in word for ext in ['.mp4', '.mov', '.webm'])
-                ), 'others')
-                
-                if category not in categories:
-                    categories[category] = []
-                categories[category].append(attachment)
-
-        # Create folders and download files
+        
+        # Create dated folder
+        script += "folder=$(date '+%Y-%m-%d_%H%M')\n"
+        script += "mkdir -p \"$folder\"\n"
+        script += "cd \"$folder\"\n"
+        
+        # Create type folders
+        script += "mkdir -p Videos Images\n"
+        
+        # Create info file
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' > info.txt\n"
+        script += "echo '          Download Information' >> info.txt\n"
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' >> info.txt\n"
+        script += "echo \"Download Date: $(date)\" >> info.txt\n"
+        script += f"echo 'Total Files: {len(media_files)}' >> info.txt\n"
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━' >> info.txt\n"
+        script += "echo 'File List:' >> info.txt\n"
+        
+        # Download with progress bar
         total_files = len(media_files)
-        current_file = 0
+        for i, attachment in enumerate(media_files, 1):
+            safe_filename = attachment.filename.replace(" ", "_")
+            ext = os.path.splitext(safe_filename)[1].lower()
+            
+            # Determine folder
+            folder = "Videos" if ext in ['.mp4', '.mov', '.webm'] else "Images"
+            
+            # Progress calculation
+            progress = int((i / total_files) * 20)
+            progress_bar = "█" * progress + "░" * (20 - progress)
+            
+            script += "clear\n"
+            script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'\n"
+            script += "echo '          Downloading Files'\n"
+            script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'\n"
+            script += "echo\n"
+            script += f"echo 'Progress: [{progress_bar}] {i}/{total_files}'\n"
+            script += f"echo 'Current File: {safe_filename}'\n"
+            script += "echo\n"
+            script += f"echo '{safe_filename}' >> info.txt\n"
+            script += f"curl -L -o \"{folder}/{safe_filename}\" \"{attachment.url}\"\n"
+            script += 'if [ $? -ne 0 ]; then\n'
+            script += f'    echo "[ERROR] Failed to download: {safe_filename}" >> errors.txt\n'
+            script += 'fi\n'
 
-        for category, files in categories.items():
-            script += f'mkdir -p "Videos/{category}"\n'
-            for attachment in files:
-                current_file += 1
-                safe_filename = attachment.filename.replace(" ", "_")
-                script += f'echo "[{current_file}/{total_files}] {safe_filename}"\n'
-                script += f'curl -L -o "Videos/{category}/{safe_filename}" "{attachment.url}"\n'
-
-        script += "\necho '✅ Download complete!'\n"
-        script += "echo 'Files are organized in the MediaDownload folder on your desktop'\n"
-        script += "xdg-open . 2>/dev/null || open . 2>/dev/null || explorer.exe . 2>/dev/null"
+        script += "\nclear\n"
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'\n"
+        script += "echo '              Complete!'\n"
+        script += "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'\n"
+        script += "echo\n"
+        script += "echo '✓ Download complete!'\n"
+        script += "echo '✓ Files are organized in dated folders on your desktop'\n"
+        script += "echo\n"
+        script += "xdg-open . 2>/dev/null || open . 2>/dev/null || explorer.exe .\n"
         return script
 
-    def _is_valid_type(self, filename, type_key):
+    def _is_valid_type(self, filename: str, type_key: str):
         """Checks if file matches requested type"""
         ext = os.path.splitext(filename.lower())[1]
         
-        # Debug pour voir ce qui est vérifié
-        print(f"Vérification fichier: {filename}")
+        # Debug
+        print(f"Checking file: {filename}")
         print(f"Extension: {ext}")
-        print(f"Type recherché: {type_key}")
-        print(f"Extensions valides: {self.bot.media_types[type_key]}")
+        print(f"Type requested: {type_key}")
+        print(f"Valid extensions: {self.bot.media_types.get(type_key, [])}")
         
+        # Make sure type_key exists in media_types
+        if type_key not in self.bot.media_types:
+            print(f"Invalid type_key: {type_key}")
+            return False
+            
         return ext in self.bot.media_types[type_key]
 
     def _format_size(self, size_bytes):
@@ -764,6 +740,70 @@ class DownloadCog(commands.Cog):
 class UtilsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.color = 0x3498db  # Couleur principale bleue
+        self.error_color = 0xe74c3c  # Rouge pour les erreurs
+        self.success_color = 0x2ecc71  # Vert pour les succès
+        self.warning_color = 0xf1c40f  # Jaune pour les avertissements
+
+    @app_commands.command(name="help", description="Shows bot help")
+    async def help_command(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="📥 Media Downloader",
+            description="A simple bot to download media files from Discord channels\n━━━━━━━━━━━━━━━━━━━━━━",
+            color=self.color
+        )
+        
+        embed.add_field(
+            name="📥 Main Commands",
+            value=(
+                "**`/download`**\n"
+                "Download media files from the current Discord channel\n"
+                "• `type` - Select media type (images, videos, all)\n"
+                "• `number` - Number of messages to analyze\n\n"
+                "**`/stats`**\n"
+                "View download statistics\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="ℹ️ Utility Commands",
+            value=(
+                "**`/botinfo`**\n"
+                "Display bot system information\n\n"
+                "**`/suggest`**\n"
+                "Submit a suggestion for the bot\n\n"
+                "**`/bug`**\n"
+                "Report a bug\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📁 Media Types for /download",
+            value=(
+                "• `📷 Images` - .jpg, .jpeg, .png, .webp\n"
+                "• `🎥 Videos` - .mp4, .mov, .webm\n"
+                "• `📁 All` - All supported formats\n"
+                "━━━━━━━━━━━━━━━━━━━━━━"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="💡 Examples",
+            value=(
+                "**Discord Media Download:**\n"
+                "• `/download type:images number:50` - Download last 50 images\n"
+                "• `/download type:videos number:All` - Download all videos\n"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Bot created by Arthur • Use /help for commands")
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="botinfo", description="Display bot system information")
     async def botinfo(self, interaction: discord.Interaction):
@@ -773,16 +813,17 @@ class UtilsCog(commands.Cog):
             
             embed = discord.Embed(
                 title="ℹ️ Bot Information",
-                color=0x3498db,
-                timestamp=datetime.now()
+                description="System and performance statistics\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=self.color
             )
             
             embed.add_field(
-                name="📈 General",
+                name="📈 General Stats",
                 value=f"""
                 **Servers:** {len(self.bot.guilds)}
                 **Users:** {total_users:,}
                 **Channels:** {total_channels:,}
+                ━━━━━━━━━━━━━━━━
                 """,
                 inline=True
             )
@@ -793,73 +834,136 @@ class UtilsCog(commands.Cog):
                 **Latency:** {round(self.bot.latency * 1000)}ms
                 **Uptime:** {str(datetime.now() - self.bot.start_time).split('.')[0]}
                 **Version:** {discord.__version__}
+                ━━━━━━━━━━━━━━━━
                 """,
                 inline=True
             )
             
             await interaction.response.send_message(embed=embed)
         except Exception as e:
-            await self.bot.log_event("❌ Error", f"Error in botinfo command: {str(e)}", 0xe74c3c)
-            await interaction.response.send_message("An error occurred.", ephemeral=True)
+            await self.error_response(interaction, str(e))
 
-    @app_commands.command(name="suggest", description="Soumettre une suggestion pour le bot")
+    @app_commands.command(name="stats", description="Display download statistics")
+    async def stats(self, interaction: discord.Interaction):
+        try:
+            embed = discord.Embed(
+                title="📊 Download Statistics",
+                description="Media download tracking and analytics\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=self.color
+            )
+            
+            # Calculate success rate
+            if self.bot.download_count > 0:
+                success_rate = (self.bot.successful_downloads / self.bot.download_count) * 100
+            else:
+                success_rate = 0
+
+            embed.add_field(
+                name="📈 Download Stats",
+                value=f"""
+                **Total:** {self.bot.download_count}
+                **Successful:** {self.bot.successful_downloads}
+                **Failed:** {self.bot.failed_downloads}
+                **Success Rate:** {success_rate:.1f}%
+                ━━━━━━━━━━━━━━━━
+                """,
+                inline=False
+            )
+
+            embed.add_field(
+                name="📁 By File Type",
+                value=f"""
+                **Images:** {self.bot.downloads_by_type['images']}
+                **Videos:** {self.bot.downloads_by_type['videos']}
+                **All Files:** {self.bot.downloads_by_type['all']}
+                ━━━━━━━━━━━━━━━━
+                """,
+                inline=True
+            )
+
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            await self.error_response(interaction, str(e))
+
+    @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     async def suggest(self, interaction: discord.Interaction, suggestion: str):
         try:
             if self.bot.logs_channel:
                 embed = discord.Embed(
-                    title="💡 Nouvelle Suggestion",
-                    description=suggestion,
-                    color=0xf1c40f,
-                    timestamp=datetime.now()
+                    title="💡 New Suggestion",
+                    description=f"{suggestion}\n━━━━━━━━━━━━━━━━━━━━━━",
+                    color=self.color
                 )
                 embed.add_field(
-                    name="Auteur",
-                    value=f"{interaction.user.mention} ({interaction.user.id})",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Serveur",
-                    value=f"{interaction.guild.name} ({interaction.guild.id})",
-                    inline=True
+                    name="📝 Details",
+                    value=f"""
+                    **From:** {interaction.user.mention}
+                    **User ID:** {interaction.user.id}
+                    **Server:** {interaction.guild.name}
+                    **Server ID:** {interaction.guild.id}
+                    ━━━━━━━━━━━━━━━━
+                    """,
+                    inline=False
                 )
                 msg = await self.bot.logs_channel.send(embed=embed)
                 await msg.add_reaction("👍")
                 await msg.add_reaction("👎")
                 
-                await interaction.response.send_message("✅ Suggestion envoyée avec succès!", ephemeral=True)
+                success_embed = discord.Embed(
+                    title="✅ Success",
+                    description="Your suggestion has been submitted successfully!",
+                    color=self.success_color
+                )
+                await interaction.response.send_message(embed=success_embed, ephemeral=True)
             else:
-                await interaction.response.send_message("❌ Le système de suggestions n'est pas configuré.", ephemeral=True)
+                await self.error_response(interaction, "Suggestion system is not configured.")
         except Exception as e:
-            await self.bot.log_event("❌ Error", f"Error in suggest command: {str(e)}", 0xe74c3c)
-            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+            await self.error_response(interaction, str(e))
 
-    @app_commands.command(name="bug", description="Signaler un bug")
+    @app_commands.command(name="bug", description="Report a bug")
     async def report_bug(self, interaction: discord.Interaction, description: str):
         try:
             if self.bot.logs_channel:
                 embed = discord.Embed(
-                    title="🐛 Rapport de Bug",
-                    description=description,
-                    color=0xe74c3c,
-                    timestamp=datetime.now()
+                    title="🐛 Bug Report",
+                    description=f"{description}\n━━━━━━━━━━━━━━━━━━━━━━",
+                    color=self.warning_color
                 )
                 embed.add_field(
-                    name="Rapporteur",
-                    value=f"{interaction.user.mention} ({interaction.user.id})",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Serveur",
-                    value=f"{interaction.guild.name} ({interaction.guild.id})",
-                    inline=True
+                    name="📝 Details",
+                    value=f"""
+                    **From:** {interaction.user.mention}
+                    **User ID:** {interaction.user.id}
+                    **Server:** {interaction.guild.name}
+                    **Server ID:** {interaction.guild.id}
+                    ━━━━━━━━━━━━━━━━
+                    """,
+                    inline=False
                 )
                 await self.bot.logs_channel.send(embed=embed)
-                await interaction.response.send_message("✅ Bug signalé avec succès!", ephemeral=True)
+                
+                success_embed = discord.Embed(
+                    title="✅ Success",
+                    description="Your bug report has been submitted successfully!",
+                    color=self.success_color
+                )
+                await interaction.response.send_message(embed=success_embed, ephemeral=True)
             else:
-                await interaction.response.send_message("❌ Le système de rapport de bugs n'est pas configuré.", ephemeral=True)
+                await self.error_response(interaction, "Bug report system is not configured.")
         except Exception as e:
-            await self.bot.log_event("❌ Error", f"Error in bug command: {str(e)}", 0xe74c3c)
-            await interaction.response.send_message("Une erreur s'est produite.", ephemeral=True)
+            await self.error_response(interaction, str(e))
+
+    async def error_response(self, interaction: discord.Interaction, error_message: str):
+        """Unified error response method"""
+        error_embed = discord.Embed(
+            title="❌ Error",
+            description=f"{error_message}\n━━━━━━━━━━━━━━━━━━━━━━",
+            color=self.error_color
+        )
+        try:
+            await interaction.response.send_message(embed=error_embed, ephemeral=True)
+        except discord.InteractionResponded:
+            await interaction.followup.send(embed=error_embed, ephemeral=True)
 
 async def main():
     try:
