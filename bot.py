@@ -364,50 +364,59 @@ class DownloadCog(commands.Cog):
         
         embed.add_field(
             name="📥 Main Commands",
-            value=(
-                "**`/download`**\n"
-                "Download media files from the current Discord channel\n"
-                "• `type` - Select media type (images, videos, all)\n"
-                "• `number` - Number of messages to analyze\n\n"
-                "**`/stats`**\n"
-                "View download statistics\n"
-                "━━━━━━━━━━━━━━━━━━━━━━"
-            ),
+            value=f"""
+            **`/download`**
+            Download media files from the current channel
+            • `type` - Select media type (images, videos, all)
+            • `number` - Number of messages to analyze
+            
+            **`/stats`**
+            View bot statistics and download tracking
+            ━━━━━━━━━━━━━━━━
+            """,
             inline=False
         )
         
         embed.add_field(
-            name="ℹ️ Utility Commands",
-            value=(
-                "**`/botinfo`**\n"
-                "Display bot system information\n\n"
-                "**`/suggest`**\n"
-                "Submit a suggestion for the bot\n\n"
-                "**`/bug`**\n"
-                "Report a bug\n"
-                "━━━━━━━━━━━━━━━━━━━━━━"
-            ),
+            name="🛠️ Utility Commands",
+            value=f"""
+            **`/suggest`**
+            Submit a suggestion for the bot
+            
+            **`/bug`**
+            Report a bug or issue
+            
+            **`/help`**
+            Show this help message
+            ━━━━━━━━━━━━━━━━
+            """,
             inline=False
         )
         
         embed.add_field(
-            name="📁 Media Types for /download",
-            value=(
-                "• `📷 Images` - .jpg, .jpeg, .png, .webp\n"
-                "• `🎥 Videos` - .mp4, .mov, .webm\n"
-                "• `📁 All` - All supported formats\n"
-                "━━━━━━━━━━━━━━━━━━━━━━"
-            ),
+            name="📁 Media Types",
+            value=f"""
+            • `images` - .jpg, .jpeg, .png, .webp, .bmp, .tiff
+            • `videos` - .mp4, .mov, .webm, .avi, .mkv, .flv
+            • `all` - All supported formats
+            ━━━━━━━━━━━━━━━━
+            """,
             inline=False
         )
         
         embed.add_field(
             name="💡 Examples",
-            value=(
-                "**Discord Media Download:**\n"
-                "• `/download type:images number:50` - Download last 50 images\n"
-                "• `/download type:videos number:All` - Download all videos\n"
-            ),
+            value=f"""
+            • `/download type:images number:50`
+            Download last 50 images
+            
+            • `/download type:videos number:100`
+            Download last 100 videos
+            
+            • `/download type:all number:200`
+            Download all media from last 200 messages
+            ━━━━━━━━━━━━━━━━
+            """,
             inline=False
         )
         
@@ -420,14 +429,7 @@ class DownloadCog(commands.Cog):
         type: app_commands.Choice[str] = app_commands.Choice(name="📁 All", value="📁 all"),
         number: app_commands.Choice[str] = app_commands.Choice(name="50", value="50")):
         
-        # Initial progress embed
-        progress_embed = discord.Embed(
-            title="📥 Download Progress",
-            description="Initializing download process...\n━━━━━━━━━━━━━━━━━━━━━━",
-            color=self.color
-        )
-        await interaction.response.send_message(embed=progress_embed)
-        message = await interaction.original_response()
+        await interaction.response.defer()
 
         try:
             # Configuration
@@ -458,7 +460,7 @@ class DownloadCog(commands.Cog):
                     description=f"No {type.value} files found in this channel.\n━━━━━━━━━━━━━━━━━━━━━━",
                     color=self.error_color
                 )
-                await message.edit(embed=no_files_embed)
+                await interaction.followup.send(embed=no_files_embed)
                 return
 
             # Create download scripts
@@ -507,20 +509,19 @@ class DownloadCog(commands.Cog):
                 inline=False
             )
             
-            await message.edit(embed=success_embed)
+            await interaction.followup.send(embed=success_embed)
 
-            # Update stats
-            await self.increment_stats(success=True, media_type=type.value)
+            # Mise à jour des stats
+            self.bot.download_count += 1
+            self.bot.successful_downloads += 1
+            self.bot.downloads_by_type[type.value] += 1
 
         except Exception as e:
-            error_embed = discord.Embed(
-                title="❌ Error",
-                description=f"An error occurred: {str(e)}\n━━━━━━━━━━━━━━━━━━━━━━",
-                color=self.error_color
-            )
-            await message.edit(embed=error_embed)
-            await self.increment_stats(success=False, media_type=type.value)
-            await self.bot.log_event("❌ Error", f"Error in download command: {str(e)}", self.error_color)
+            self.bot.download_count += 1
+            self.bot.failed_downloads += 1
+            await interaction.followup.send(f"An error occurred: {str(e)}")
+            if self.bot.logs_channel:
+                await self.bot.logs_channel.send(f"Error in download command: {str(e)}")
 
     def _create_batch_script(self, media_files):
         """Creates Windows batch script with consistent styling"""
@@ -796,4 +797,11 @@ class UtilsCog(commands.Cog):
             name="💡 Examples",
             value=(
                 "**Discord Media Download:**\n"
-                "• `/download type:images number:50`
+                "• `/download type:images number:50` - Download last 50 images\n"
+                "• `/download type:videos number:All` - Download all videos\n"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Bot created by Arthur • Use /help for commands")
+        await interaction.response.send_message(embed=embed)
