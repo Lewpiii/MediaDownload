@@ -122,7 +122,7 @@ class MediaDownload(commands.Bot):
                                     "Bot was down and has recovered",
                                     0xf1c40f,
                                     Downtime=str(downtime).split('.')[0],
-                                    "Last Seen"=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S")
+                                    Last_Seen=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S")
                                 )
                     except FileNotFoundError:
                         pass  # First bot startup
@@ -134,7 +134,7 @@ class MediaDownload(commands.Bot):
                         0x2ecc71,
                         Environment="```\nRender Starter```",
                         Version=f"Discord.py {discord.__version__}",
-                        "Start Time"=self.start_time.strftime("%Y-%m-%d %H:%M:%S")
+                        Start_Time=self.start_time.strftime("%Y-%m-%d %H:%M:%S")
                     )
                 else:
                     print("❌ Logs channel not found!")
@@ -796,187 +796,4 @@ class UtilsCog(commands.Cog):
             name="💡 Examples",
             value=(
                 "**Discord Media Download:**\n"
-                "• `/download type:images number:50` - Download last 50 images\n"
-                "• `/download type:videos number:All` - Download all videos\n"
-            ),
-            inline=False
-        )
-        
-        embed.set_footer(text="Bot created by Arthur • Use /help for commands")
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="botinfo", description="Display bot system information")
-    async def botinfo(self, interaction: discord.Interaction):
-        try:
-            total_users = sum(g.member_count for g in self.bot.guilds)
-            total_channels = sum(len(g.channels) for g in self.bot.guilds)
-            
-            embed = discord.Embed(
-                title="ℹ️ Bot Information",
-                description="System and performance statistics\n━━━━━━━━━━━━━━━━━━━━━━",
-                color=self.color
-            )
-            
-            embed.add_field(
-                name="📈 General Stats",
-                value=f"""
-                **Servers:** {len(self.bot.guilds)}
-                **Users:** {total_users:,}
-                **Channels:** {total_channels:,}
-                ━━━━━━━━━━━━━━━━
-                """,
-                inline=True
-            )
-            
-            embed.add_field(
-                name="⚙️ Performance",
-                value=f"""
-                **Latency:** {round(self.bot.latency * 1000)}ms
-                **Uptime:** {str(datetime.now() - self.bot.start_time).split('.')[0]}
-                **Version:** {discord.__version__}
-                ━━━━━━━━━━━━━━━━
-                """,
-                inline=True
-            )
-            
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            await self.error_response(interaction, str(e))
-
-    @app_commands.command(name="stats", description="Display download statistics")
-    async def stats(self, interaction: discord.Interaction):
-        try:
-            embed = discord.Embed(
-                title="📊 Download Statistics",
-                description="Media download tracking and analytics\n━━━━━━━━━━━━━━━━━━━━━━",
-                color=self.color
-            )
-            
-            # Calculate success rate
-            if self.bot.download_count > 0:
-                success_rate = (self.bot.successful_downloads / self.bot.download_count) * 100
-            else:
-                success_rate = 0
-
-            embed.add_field(
-                name="📈 Download Stats",
-                value=f"""
-                **Total:** {self.bot.download_count}
-                **Successful:** {self.bot.successful_downloads}
-                **Failed:** {self.bot.failed_downloads}
-                **Success Rate:** {success_rate:.1f}%
-                ━━━━━━━━━━━━━━━━
-                """,
-                inline=False
-            )
-
-            embed.add_field(
-                name="📁 By File Type",
-                value=f"""
-                **Images:** {self.bot.downloads_by_type['images']}
-                **Videos:** {self.bot.downloads_by_type['videos']}
-                **All Files:** {self.bot.downloads_by_type['all']}
-                ━━━━━━━━━━━━━━━━
-                """,
-                inline=True
-            )
-
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            await self.error_response(interaction, str(e))
-
-    @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
-    async def suggest(self, interaction: discord.Interaction, suggestion: str):
-        try:
-            if self.bot.logs_channel:
-                embed = discord.Embed(
-                    title="💡 New Suggestion",
-                    description=f"{suggestion}\n━━━━━━━━━━━━━━━━━━━━━━",
-                    color=self.color
-                )
-                embed.add_field(
-                    name="📝 Details",
-                    value=f"""
-                    **From:** {interaction.user.mention}
-                    **User ID:** {interaction.user.id}
-                    **Server:** {interaction.guild.name}
-                    **Server ID:** {interaction.guild.id}
-                    ━━━━━━━━━━━━━━━━
-                    """,
-                    inline=False
-                )
-                msg = await self.bot.logs_channel.send(embed=embed)
-                await msg.add_reaction("👍")
-                await msg.add_reaction("👎")
-                
-                success_embed = discord.Embed(
-                    title="✅ Success",
-                    description="Your suggestion has been submitted successfully!",
-                    color=self.success_color
-                )
-                await interaction.response.send_message(embed=success_embed, ephemeral=True)
-            else:
-                await self.error_response(interaction, "Suggestion system is not configured.")
-        except Exception as e:
-            await self.error_response(interaction, str(e))
-
-    @app_commands.command(name="bug", description="Report a bug")
-    async def report_bug(self, interaction: discord.Interaction, description: str):
-        try:
-            if self.bot.logs_channel:
-                embed = discord.Embed(
-                    title="🐛 Bug Report",
-                    description=f"{description}\n━━━━━━━━━━━━━━━━━━━━━━",
-                    color=self.warning_color
-                )
-                embed.add_field(
-                    name="📝 Details",
-                    value=f"""
-                    **From:** {interaction.user.mention}
-                    **User ID:** {interaction.user.id}
-                    **Server:** {interaction.guild.name}
-                    **Server ID:** {interaction.guild.id}
-                    ━━━━━━━━━━━━━━━━
-                    """,
-                    inline=False
-                )
-                await self.bot.logs_channel.send(embed=embed)
-                
-                success_embed = discord.Embed(
-                    title="✅ Success",
-                    description="Your bug report has been submitted successfully!",
-                    color=self.success_color
-                )
-                await interaction.response.send_message(embed=success_embed, ephemeral=True)
-            else:
-                await self.error_response(interaction, "Bug report system is not configured.")
-        except Exception as e:
-            await self.error_response(interaction, str(e))
-
-    async def error_response(self, interaction: discord.Interaction, error_message: str):
-        """Unified error response method"""
-        error_embed = discord.Embed(
-            title="❌ Error",
-            description=f"{error_message}\n━━━━━━━━━━━━━━━━━━━━━━",
-            color=self.error_color
-        )
-        try:
-            await interaction.response.send_message(embed=error_embed, ephemeral=True)
-        except discord.InteractionResponded:
-            await interaction.followup.send(embed=error_embed, ephemeral=True)
-
-async def main():
-    try:
-        bot = MediaDownload()
-        bot.start_time = datetime.now()
-        async with bot:
-            print("🚀 Starting bot...")
-            await bot.start(TOKEN)
-    except discord.errors.LoginFailure as e:
-        print(f"❌ Login Failed: {str(e)}")
-        print("⚠️ Please check if your token is valid")
-    except Exception as e:
-        print(f"❌ Unexpected error: {str(e)}")
-
-# Start bot
-asyncio.run(main()) 
+                "• `/download type:images number:50`
