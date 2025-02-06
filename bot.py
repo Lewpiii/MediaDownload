@@ -87,9 +87,27 @@ class MediaDownload(commands.Bot):
                             content=f"🟢 Bot Heartbeat\nTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
                         )
                 self.last_heartbeat = current_time
+                
+                if self.last_heartbeat:
+                    time_since_last = (current_time - self.last_heartbeat).total_seconds()
+                    if time_since_last > self.alert_threshold:
+                        await self.log_event(
+                            "⚠️ Service Alert",
+                            "Bot is experiencing delays",
+                            0xff9900,
+                            last_response=f"{time_since_last:.1f} seconds ago",
+                            status="Investigating"
+                        )
+                
                 await asyncio.sleep(300)  # 5 minutes
             except Exception as e:
                 print(f"Heartbeat error: {e}")
+                await self.log_event(
+                    "🔴 Heartbeat Error",
+                    "Error in heartbeat monitoring",
+                    0xe74c3c,
+                    error=f"```{str(e)}```"
+                )
                 await asyncio.sleep(60)
 
     async def log_event(self, title: str, description: str, color: int, **fields):
@@ -105,8 +123,9 @@ class MediaDownload(commands.Bot):
 
                 # Add all additional fields
                 for name, value in fields.items():
+                    field_name = name.replace('_', ' ')
                     embed.add_field(
-                        name=name,
+                        name=field_name,
                         value=f"{value}\n━━━━━━━━━━━━━━━━",
                         inline=False
                     )
@@ -222,9 +241,9 @@ class MediaDownload(commands.Bot):
                 "⚠️ Error Occurred",
                 f"An error occurred in {context}",
                 0xe74c3c,
-                "Error Type"=f"`{type(error).__name__}`",
-                "Error Message"=f"```py\n{str(error)}\n```",
-                Traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
+                error_type=f"`{type(error).__name__}`",
+                error_message=f"```py\n{str(error)}\n```",
+                traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
 
     async def heartbeat(self):
@@ -247,8 +266,8 @@ class MediaDownload(commands.Bot):
                                 "⚠️ Service Alert",
                                 "Bot is experiencing delays",
                                 0xff9900,
-                                "Last Response"=f"{time_since_last:.1f} seconds ago",
-                                Status="Investigating"
+                                last_response=f"{time_since_last:.1f} seconds ago",
+                                status="Investigating"
                             )
                 
                 await asyncio.sleep(30)
@@ -259,7 +278,7 @@ class MediaDownload(commands.Bot):
                         "🔴 Heartbeat Error",
                         "Error in heartbeat monitoring",
                         0xe74c3c,
-                        Error=f"```{str(e)}```"
+                        error=f"```{str(e)}```"
                     )
                 await asyncio.sleep(30)
 
