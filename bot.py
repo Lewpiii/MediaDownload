@@ -295,59 +295,55 @@ class DownloadCog(commands.Cog):
         
         embed.add_field(
             name="📥 Main Commands",
-            value=f"""
-            **`/download`**
-            Download media files from the current channel
-            • `type` - Select media type (images, videos, all)
-            • `number` - Number of messages to analyze
-            
-            **`/botinfo`**
-            View bot statistics and system information
-            ━━━━━━━━━━━━━━━━
-            """,
+            value="""**`/download`**
+Download media files from the current channel
+\n• `type` - Select media type (images, videos, all)
+• `number` - Number of messages to analyze
+
+**`/stats`**
+View bot statistics and download tracking
+━━━━━━━━━━━━━━━━""",
             inline=False
         )
         
         embed.add_field(
             name="🛠️ Utility Commands",
-            value=f"""
-            **`/suggest`**
-            Submit a suggestion for the bot
-            
-            **`/bug`**
-            Report a bug or issue
-            
-            **`/help`**
-            Show this help message
-            ━━━━━━━━━━━━━━━━
-            """,
+            value="""**`/suggest`**
+Submit a suggestion for the bot
+\n• `category` - Type of suggestion
+• `suggestion` - Your detailed suggestion
+
+**`/bug`**
+Report a bug or issue
+\n• `severity` - How serious the bug is
+• `description` - Detailed bug description
+
+**`/help`**
+Show this help message
+━━━━━━━━━━━━━━━━""",
             inline=False
         )
         
         embed.add_field(
             name="📁 Media Types",
-            value=f"""
-            • `images` - .jpg, .jpeg, .png, .webp, .bmp, .tiff
-            • `videos` - .mp4, .mov, .webm, .avi, .mkv, .flv
-            • `all` - All supported formats
-            ━━━━━━━━━━━━━━━━
-            """,
+            value="""• `images` - .jpg, .jpeg, .png, .webp, .bmp, .tiff
+• `videos` - .mp4, .mov, .webm, .avi, .mkv, .flv
+• `all` - All supported formats
+━━━━━━━━━━━━━━━━""",
             inline=False
         )
         
         embed.add_field(
             name="💡 Examples",
-            value=f"""
-            • `/download type:images number:50`
-            Download last 50 images
-            
-            • `/download type:videos number:100`
-            Download last 100 videos
-            
-            • `/download type:all number:200`
-            Download all media from last 200 messages
-            ━━━━━━━━━━━━━━━━
-            """,
+            value="""• `/download type:📁 All Files number:50`
+Download last 50 files
+
+• `/download type:📷 Images number:100`
+Download last 100 images
+
+• `/download type:🎥 Videos number:200`
+Download last 200 videos
+━━━━━━━━━━━━━━━━""",
             inline=False
         )
         
@@ -423,7 +419,6 @@ class DownloadCog(commands.Cog):
         number=[
             app_commands.Choice(name="50 messages", value=50),
             app_commands.Choice(name="100 messages", value=100),
-            app_commands.Choice(name="200 messages", value=200),
             app_commands.Choice(name="500 messages", value=500),
             app_commands.Choice(name="All messages", value=-1)
         ]
