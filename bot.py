@@ -202,22 +202,41 @@ class MediaDownload(commands.Bot):
             await self.logs_channel.send(embed=embed)
 
     async def change_status(self):
+        """Enhanced dynamic status system"""
         while not self.is_closed():
             try:
+                current_time = datetime.now()
+                uptime = current_time - self.start_time
+                
                 statuses = [
                     discord.Activity(
                         type=discord.ActivityType.watching,
-                        name="/help for commands"
+                        name=f"/help • {len(self.guilds)} servers"
                     ),
                     discord.Activity(
                         type=discord.ActivityType.watching,
-                        name=f"{len(self.guilds)} servers | {sum(g.member_count for g in self.guilds)} users"
+                        name=f"📥 {self.download_count} downloads"
+                    ),
+                    discord.Activity(
+                        type=discord.ActivityType.playing,
+                        name=f"with {sum(g.member_count for g in self.guilds)} users"
+                    ),
+                    discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name=f"⬆️ Uptime: {str(uptime).split('.')[0]}"
+                    ),
+                    discord.Activity(
+                        type=discord.ActivityType.listening,
+                        name=f"🏓 Ping: {round(self.latency * 1000)}ms"
                     )
                 ]
                 
-                await self.change_presence(activity=statuses[self.status_index])
+                await self.change_presence(
+                    activity=statuses[self.status_index],
+                    status=discord.Status.online
+                )
                 self.status_index = (self.status_index + 1) % len(statuses)
-                await asyncio.sleep(20)  # Change toutes les 20 secondes
+                await asyncio.sleep(20)
             except Exception as e:
                 print(f"Error in change_status: {e}")
                 await asyncio.sleep(20)
@@ -454,6 +473,7 @@ class DownloadCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="download", description="Download media files")
+    @app_commands.checks.cooldown(1, 60)  # Limite : 1 utilisation toutes les 60 secondes
     @app_commands.choices(
         type=[
             app_commands.Choice(name="📷 Images", value="images"),
@@ -474,130 +494,116 @@ class DownloadCog(commands.Cog):
         number="Number of messages to analyze"
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[str]):
+        # Création de l'embed de progression
+        progress_embed = discord.Embed(
+            title="📥 Download Progress",
+            description="Initializing...",
+            color=self.color
+        )
+        await interaction.response.send_message(embed=progress_embed)
+        message = await interaction.original_response()
+
         try:
-            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
-            status_message = await interaction.original_response()
-
-            type_key = {
-                'images': '📷 images',
-                'videos': '🎥 videos',
-                'all': '📁 all'
-            }.get(type.value)
-
+            # Configuration initiale
             limit = None if number.value == "-1" else int(number.value)
-            
             media_files = []
             total_size = 0
             processed_messages = 0
             start_time = time.time()
             
+            # Barre de progression
+            progress_bar = "⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜"
+            
             async with interaction.channel.typing():
-                async for message in interaction.channel.history(limit=limit):
-                    if time.time() - start_time > 60:
-                        await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
+                async for msg in interaction.channel.history(limit=limit):
+                    if time.time() - start_time > 60:  # Timeout après 60 secondes
+                        error_embed = discord.Embed(
+                            title="⚠️ Timeout",
+                            description="Search took too long. Please try with fewer messages.",
+                            color=0xe74c3c
+                        )
+                        await message.edit(embed=error_embed)
                         return
 
                     processed_messages += 1
-                    if processed_messages % 50 == 0:
-                        await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
+                    if processed_messages % 25 == 0:  # Update tous les 25 messages
+                        # Mise à jour de la barre de progression
+                        if limit:
+                            progress = min(int((processed_messages / limit) * 10), 10)
+                            progress_bar = "🟦" * progress + "⬜" * (10 - progress)
+                        
+                        progress_embed.description = f"""
+                        🔍 Scanning messages...
+                        {progress_bar}
+                        
+                        Messages scanned: {processed_messages}
+                        Files found: {len(media_files)}
+                        Total size: {self._format_size(total_size)}
+                        """
+                        await message.edit(embed=progress_embed)
                     
-                    try:
-                        for attachment in message.attachments:
-                            if self._is_valid_type(attachment.filename, type_key):
-                                media_files.append(attachment)
-                                total_size += attachment.size
-                    
-                    except Exception as e:
-                        print(f"Erreur lors de l'analyse d'un message: {e}")
-                        continue
+                    # Analyse des attachements
+                    for attachment in msg.attachments:
+                        if self._is_valid_type(attachment.filename, type.value):
+                            media_files.append(attachment)
+                            total_size += attachment.size
 
+            # Message final
             if not media_files:
-                await status_message.edit(content=f"❌ Aucun {type_key} trouvé dans ce canal.")
+                final_embed = discord.Embed(
+                    title="❌ No Files Found",
+                    description=f"No {type.value} files found in this channel.",
+                    color=0xe74c3c
+                )
+                await message.edit(embed=final_embed)
                 return
 
-            try:
-                # Create scripts
-                batch_content = self._create_batch_script(media_files)
-                shell_content = self._create_shell_script(media_files)
+            # Création des scripts
+            batch_content = self._create_batch_script(media_files)
+            shell_content = self._create_shell_script(media_files)
 
-                # Create thread
-                thread_name = f"📥 Download {type_key}"
-                if limit:
-                    thread_name += f" ({limit} messages, {len(media_files)} files)"
-                else:
-                    thread_name += f" (all messages, {len(media_files)} files)"
+            # Création du thread
+            thread_name = f"📥 Download {type.value}"
+            if limit:
+                thread_name += f" ({limit} msgs, {len(media_files)} files)"
+            else:
+                thread_name += f" (all msgs, {len(media_files)} files)"
 
-                thread = await interaction.channel.create_thread(
-                    name=thread_name,
-                    type=discord.ChannelType.public_thread
-                )
+            thread = await interaction.channel.create_thread(
+                name=thread_name,
+                type=discord.ChannelType.public_thread
+            )
 
-                # Send information
-                embed = discord.Embed(
-                    title="📥 Download Ready!",
-                    description="Choose the script for your operating system:",
-                    color=self.color
-                )
-                
-                # Scope description
-                scope_desc = f"• Messages scanned: {processed_messages}\n"
-                if limit:
-                    scope_desc += f"• Limit: {limit} messages\n"
-                else:
-                    scope_desc += "• Scope: Entire channel\n"
+            # Message de succès
+            success_embed = discord.Embed(
+                title="✅ Download Ready!",
+                description=f"Download scripts are ready in {thread.mention}",
+                color=self.color
+            )
+            success_embed.add_field(
+                name="📊 Summary",
+                value=f"""
+                Messages scanned: {processed_messages}
+                Files found: {len(media_files)}
+                Total size: {self._format_size(total_size)}
+                Time taken: {time.time() - start_time:.1f}s
+                """,
+                inline=False
+            )
+            await message.edit(embed=success_embed)
 
-                embed.add_field(
-                    name="📊 Summary",
-                    value=(
-                        scope_desc +
-                        f"• Type: {type_key}\n"
-                        f"• Files found: {len(media_files)}\n"
-                        f"• Total size: {self._format_size(total_size)}"
-                    ),
-                    inline=False
-                )
-                
-                embed.add_field(
-                    name="🪟 Windows",
-                    value="1. Download `download.bat`\n2. Double-click to run",
-                    inline=True
-                )
-                
-                embed.add_field(
-                    name="🐧 Linux/Mac",
-                    value="1. Download `download.sh`\n2. Run `chmod +x download.sh`\n3. Run `./download.sh`",
-                    inline=True
-                )
-
-                await thread.send(embed=embed)
-
-                # Send scripts
-                await thread.send(
-                    "📦 Download scripts:",
-                    files=[
-                        discord.File(io.BytesIO(batch_content.encode()), "download.bat"),
-                        discord.File(io.BytesIO(shell_content.encode()), "download.sh")
-                    ]
-                )
-
-                # Update status
-                embed_status = discord.Embed(
-                    description=f"✅ Download ready in {thread.mention}",
-                    color=self.color
-                )
-                await status_message.edit(content=None, embed=embed_status)
-
-                await self.increment_stats(success=True, media_type=type.value)
-
-            except Exception as e:
-                await status_message.edit(content=f"❌ Error: {str(e)}")
-                if 'thread' in locals():
-                    await thread.delete()
-                await self.increment_stats(success=False, media_type=type.value)
+            # Mise à jour des statistiques
+            await self.increment_stats(success=True, media_type=type.value)
 
         except Exception as e:
-            print(f"Erreur dans download_media: {e}")
-            await interaction.followup.send(f"❌ Une erreur est survenue: {str(e)}", ephemeral=True)
+            error_embed = discord.Embed(
+                title="❌ Error",
+                description=f"An error occurred: {str(e)}",
+                color=0xe74c3c
+            )
+            await message.edit(embed=error_embed)
+            await self.increment_stats(success=False, media_type=type.value)
+            await self.bot.log_event("❌ Error", f"Error in download command: {str(e)}", 0xe74c3c)
 
     def _create_batch_script(self, media_files):
         """Creates Windows batch script with automatic organization"""
