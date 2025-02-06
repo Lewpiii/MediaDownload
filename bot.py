@@ -350,49 +350,49 @@ Download last 200 videos
         embed.set_footer(text="Bot created by Arthur • Use /help for commands")
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="botinfo", description="Display bot statistics and information")
-    async def botinfo(self, interaction: discord.Interaction):
+    @app_commands.command(name="stats", description="Display bot statistics and information")
+    async def stats(self, interaction: discord.Interaction):
         try:
             total_users = sum(g.member_count for g in self.bot.guilds)
             total_channels = sum(len(g.channels) for g in self.bot.guilds)
             uptime = datetime.now() - self.bot.start_time
             
             embed = discord.Embed(
-                title="ℹ️ Bot Information",
-                description="System information and statistics\n━━━━━━━━━━━━━━━━━━━━━━",
+                title="📊 Statistiques du Bot",
+                description="Informations système et statistiques\n━━━━━━━━━━━━━━━━━━━━━━",
                 color=self.color
             )
             
             embed.add_field(
-                name="📊 General Stats",
+                name="📈 Statistiques Générales",
                 value=f"""
-                **Servers:** {len(self.bot.guilds)}
-                **Users:** {total_users:,}
-                **Channels:** {total_channels:,}
+                **Serveurs:** {len(self.bot.guilds)}
+                **Utilisateurs:** {total_users:,}
+                **Canaux:** {total_channels:,}
                 **Uptime:** {str(uptime).split('.')[0]}
-                **Latency:** {round(self.bot.latency * 1000)}ms
+                **Latence:** {round(self.bot.latency * 1000)}ms
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
             )
             
             embed.add_field(
-                name="📥 Download Stats",
+                name="📥 Statistiques de Téléchargement",
                 value=f"""
                 **Total Downloads:** {self.bot.download_count}
-                **Successful:** {self.bot.successful_downloads}
-                **Failed:** {self.bot.failed_downloads}
+                **Réussis:** {self.bot.successful_downloads}
+                **Échoués:** {self.bot.failed_downloads}
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
             )
             
             embed.add_field(
-                name="📁 By File Type",
+                name="📁 Par Type de Fichier",
                 value=f"""
                 **Images:** {self.bot.downloads_by_type['images']}
-                **Videos:** {self.bot.downloads_by_type['videos']}
-                **All Files:** {self.bot.downloads_by_type['all']}
+                **Vidéos:** {self.bot.downloads_by_type['videos']}
+                **Tous Fichiers:** {self.bot.downloads_by_type['all']}
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
@@ -401,7 +401,7 @@ Download last 200 videos
             await interaction.response.send_message(embed=embed)
         except Exception as e:
             await interaction.response.send_message(
-                f"An error occurred: {str(e)}", 
+                f"Une erreur est survenue: {str(e)}", 
                 ephemeral=True
             )
 
