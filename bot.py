@@ -417,7 +417,7 @@ Download last 200 videos
             app_commands.Choice(name="50 messages", value=50),
             app_commands.Choice(name="100 messages", value=100),
             app_commands.Choice(name="500 messages", value=500),
-            app_commands.Choice(name="All messages", value=None)
+            app_commands.Choice(name="All messages", value=999999)
         ]
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
@@ -425,15 +425,15 @@ Download last 200 videos
             await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
             status_message = await interaction.original_response()
 
-            # Correction de la conversion du type
+            # Conversion du type
             type_key = {
                 'images': '📷 images',
                 'videos': '🎥 videos',
                 'all': '📁 all'
             }.get(type.value)
 
-            # Correction de la gestion du nombre de messages
-            limit = number.value  # Plus besoin de conversion car déjà None ou int
+            # Gestion du nombre de messages
+            limit = None if number.value == 999999 else number.value
             
             media_files = []
             total_size = 0
