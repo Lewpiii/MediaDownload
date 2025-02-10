@@ -75,6 +75,14 @@ class MediaDownload(commands.Bot):
             await self.tree.sync()
             print("✅ Slash commands synced!")
             
+            # Status fixe
+            total_users = sum(g.member_count for g in self.guilds)
+            activity = discord.Activity(
+                type=discord.ActivityType.watching,
+                name=f"/help for {total_users} users"
+            )
+            await self.change_presence(activity=activity)
+            
             # Démarrer le heartbeat
             self.loop.create_task(self.heartbeat_task())
         except Exception as e:
