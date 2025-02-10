@@ -354,15 +354,15 @@ if __name__ == '__main__':
                 script += f'curl -L -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
             script += "\n"
         
-        # Fin du script
+        # Fin du script avec une meilleure présentation
         script += """
 :: Fin du téléchargement
 echo.
-echo  ╔══════════════════════════════════════════════════════════════════════════════╗
-echo  ║                            Download Complete!                                 ║
-echo  ╚══════════════════════════════════════════════════════════════════════════════╝
+echo  ================================
+echo          Download Complete!
+echo  ================================
 echo.
-echo  [*] Files have been downloaded to: !DOWNLOAD_DIR!
+echo  Files have been downloaded to: !DOWNLOAD_DIR!
 echo.
 pause
 exit /b
