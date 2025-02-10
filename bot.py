@@ -772,7 +772,10 @@ Download last 200 videos
                      category: app_commands.Choice[str],
                      suggestion: str):
         try:
-            if self.bot.logs_channel:
+            # Changement du canal pour les suggestions
+            suggestion_channel = self.bot.get_channel(1333109019128107120)  # Nouveau canal des suggestions
+            
+            if suggestion_channel:
                 embed = discord.Embed(
                     title="💡 New Suggestion",
                     description=f"{suggestion}\n━━━━━━━━━━━━━━━━━━━━━━",
@@ -785,12 +788,13 @@ Download last 200 videos
                     value=f"""
                     **User:** {interaction.user.mention}
                     **Server:** {interaction.guild.name}
+                    **Category:** {category.name}
                     ━━━━━━━━━━━━━━━━
                     """,
                     inline=False
                 )
                 
-                msg = await self.bot.logs_channel.send(embed=embed)
+                msg = await suggestion_channel.send(embed=embed)
                 await msg.add_reaction("👍")
                 await msg.add_reaction("👎")
                 
@@ -821,7 +825,10 @@ Download last 200 videos
                  severity: app_commands.Choice[str],
                  description: str):
         try:
-            if self.bot.logs_channel:
+            # Changement du canal pour les bugs
+            bug_channel = self.bot.get_channel(1338540085515128944)  # Nouveau canal des bugs
+            
+            if bug_channel:
                 embed = discord.Embed(
                     title="🐛 Bug Report",
                     description=f"{description}\n━━━━━━━━━━━━━━━━━━━━━━",
@@ -836,12 +843,13 @@ Download last 200 videos
                     **User ID:** {interaction.user.id}
                     **Server:** {interaction.guild.name}
                     **Server ID:** {interaction.guild.id}
+                    **Severity:** {severity.name}
                     ━━━━━━━━━━━━━━━━
                     """,
                     inline=False
                 )
                 
-                await self.bot.logs_channel.send(embed=embed)
+                await bug_channel.send(embed=embed)
                 
                 success_embed = discord.Embed(
                     title="✅ Success",
