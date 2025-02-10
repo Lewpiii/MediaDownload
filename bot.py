@@ -258,17 +258,25 @@ class DownloadCog(commands.Cog):
         self.color = 0x3498db
         # Initialiser le client Top.gg avec votre token
         self.topgg_token = os.getenv('TOPGG_TOKEN')
-        self.topgg_client = topgg.DBLClient(bot, self.topgg_token)
+        try:
+            if self.topgg_token:
+                self.topgg_client = topgg.DBLClient(bot, self.topgg_token)
+            else:
+                print("⚠️ TOPGG_TOKEN non trouvé dans les variables d'environnement")
+        except Exception as e:
+            print(f"Erreur d'initialisation Top.gg: {e}")
+            self.topgg_client = None
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté"""
         try:
-            has_voted = await self.topgg_client.get_user_vote(user_id)
-            return has_voted
+            if self.topgg_client:
+                has_voted = await self.topgg_client.get_user_vote(user_id)
+                return has_voted
+            return True  # En mode développement si pas de client Top.gg
         except Exception as e:
             print(f"Erreur Top.gg: {e}")
-            # En mode développement, on peut retourner True pour tester
-            return True  # À mettre en False en production
+            return True  # En mode développement, retourne True en cas d'erreur
 
     def _create_exe_wrapper(self, batch_content):
         """Create an exe wrapper for the batch script"""
@@ -636,32 +644,32 @@ Download last 200 videos
         ]
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
-        # Vérifier si l'utilisateur a voté
-        has_voted = await self.check_vote(interaction.user.id)
-        
-        # Si l'utilisateur n'a pas voté et demande plus de 50 messages ou tous les fichiers
-        if not has_voted and (number.value > 50 or type.value == "all"):
-            embed = discord.Embed(
-                title="⚠️ Vote Required",
-                description=(
-                    "You need to vote for the bot to use this feature!\n\n"
-                    "📝 **Why vote?**\n"
-                    "• Support the bot\n"
-                    "• Get access to all features\n"
-                    "• Help us grow\n\n"
-                    "🔗 **Vote Link**\n"
-                    "[Click here to vote](https://top.gg/bot/YOUR_BOT_ID/vote)\n\n"
-                    "✨ **Free Features**\n"
-                    "• Download up to 50 messages\n"
-                    "• Download specific media types\n"
-                ),
-                color=0xFF0000
-            )
-            embed.set_footer(text="Your vote lasts 12 hours!")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
         try:
+            # Vérifier si l'utilisateur a voté
+            has_voted = await self.check_vote(interaction.user.id)
+            
+            # Si l'utilisateur n'a pas voté et demande plus de 50 messages ou tous les fichiers
+            if not has_voted and (number.value > 50 or type.value == "all"):
+                embed = discord.Embed(
+                    title="⚠️ Vote Required",
+                    description=(
+                        "You need to vote for the bot to use this feature!\n\n"
+                        "📝 **Why vote?**\n"
+                        "• Support the bot\n"
+                        "• Get access to all features\n"
+                        "• Help us grow\n\n"
+                        "🔗 **Vote Link**\n"
+                        "[Click here to vote](https://top.gg/bot/YOUR_BOT_ID/vote)\n\n"
+                        "✨ **Free Features**\n"
+                        "• Download up to 50 messages\n"
+                        "• Download specific media types\n"
+                    ),
+                    color=0xFF0000
+                )
+                embed.set_footer(text="Your vote lasts 12 hours!")
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
             await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
             status_message = await interaction.original_response()
 
@@ -733,13 +741,11 @@ Download last 200 videos
                 "4. Wait for completion"
             )
 
-            # Création et envoi des fichiers
             await thread.send(
                 content=summary,
                 files=[
-                    discord.File(io.StringIO(batch_content),
-                    discord.File(io.StringIO(self._create_shell_script(media_files)),
-                                filename="download.sh")
+                    discord.File(io.StringIO(batch_content), "download.bat"),
+                    discord.File(io.StringIO(self._create_shell_script(media_files)), "download.sh")
                 ]
             )
 
