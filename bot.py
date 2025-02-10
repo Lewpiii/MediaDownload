@@ -388,7 +388,7 @@ Download last 200 videos
             app_commands.Choice(name="100 messages", value=100),
             app_commands.Choice(name="500 messages", value=500),
             app_commands.Choice(name="1000 messages", value=1000),
-            app_commands.Choice(name="All messages", value=None)
+            app_commands.Choice(name="All messages", value=0)
         ]
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
@@ -403,8 +403,8 @@ Download last 200 videos
             # Conversion du type
             type_key = type.value
 
-            # Gestion du nombre de messages
-            limit = number.value  # Utilisation directe de la valeur (None pour "All messages")
+            # Gestion du nombre de messages (0 signifie "tous les messages")
+            limit = None if number.value == 0 else number.value
             
             media_files = []
             total_size = 0
@@ -413,7 +413,7 @@ Download last 200 videos
             
             async with interaction.channel.typing():
                 async for message in interaction.channel.history(limit=limit):
-                    if time.time() - start_time > 300:  # Augmenté à 5 minutes au lieu de 1
+                    if time.time() - start_time > 300:  # 5 minutes timeout
                         await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
                         return
 
