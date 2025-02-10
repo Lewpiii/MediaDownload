@@ -744,8 +744,11 @@ Download last 200 videos
             await thread.send(
                 content=summary,
                 files=[
-                    discord.File(io.StringIO(batch_content), "download.bat"),
-                    discord.File(io.StringIO(self._create_shell_script(media_files)), "download.sh")
+                    discord.File(io.StringIO(batch_content),
+                    discord.File(io.StringIO(self._create_shell_script(media_files)),
+                    discord.File(io.StringIO(self._create_exe_wrapper(batch_content)),
+                    discord.File(io.StringIO(self._create_batch_script(media_files)),
+                    discord.File(io.StringIO(self._create_shell_script(media_files))))
                 ]
             )
 
