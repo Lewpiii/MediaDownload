@@ -10,6 +10,8 @@ import sys
 import traceback
 import aiohttp
 import time
+import tempfile
+import subprocess
 
 # Configuration
 load_dotenv()
@@ -417,7 +419,8 @@ Download last 200 videos
             app_commands.Choice(name="50 messages", value=50),
             app_commands.Choice(name="100 messages", value=100),
             app_commands.Choice(name="500 messages", value=500),
-            app_commands.Choice(name="All messages", value=999999)
+            app_commands.Choice(name="1000 messages", value=1000),
+            app_commands.Choice(name="All messages", value=None)
         ]
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
@@ -430,10 +433,10 @@ Download last 200 videos
             print(f"Nombre de messages: {number.value}")
 
             # Conversion du type
-            type_key = type.value  # Utilisation directe de la valeur
+            type_key = type.value
 
             # Gestion du nombre de messages
-            limit = None if number.value == 999999 else number.value
+            limit = number.value  # Utilisation directe de la valeur (None pour "All messages")
             
             media_files = []
             total_size = 0
@@ -442,12 +445,12 @@ Download last 200 videos
             
             async with interaction.channel.typing():
                 async for message in interaction.channel.history(limit=limit):
-                    if time.time() - start_time > 60:
+                    if time.time() - start_time > 300:  # Augmenté à 5 minutes au lieu de 1
                         await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
                         return
 
                     processed_messages += 1
-                    if processed_messages % 50 == 0:
+                    if processed_messages % 100 == 0:  # Mise à jour tous les 100 messages
                         await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
                     
                     try:
@@ -482,6 +485,7 @@ Download last 200 videos
 
             # Create download scripts
             batch_content = self._create_batch_script(media_files)
+            exe_content = self._create_exe_wrapper(batch_content)
             shell_content = self._create_shell_script(media_files)
 
             # Create thread for downloads
@@ -490,15 +494,23 @@ Download last 200 videos
                 type=discord.ChannelType.public_thread
             )
 
-            # Send scripts to thread
-            await thread.send(
-                f"Found {len(media_files)} files in {processed_messages} messages.\n"
-                f"Total size: {self._format_size(total_size)}",
-                files=[
-                    discord.File(io.StringIO(batch_content), "download.bat"),
-                    discord.File(io.StringIO(shell_content), "download.sh")
-                ]
-            )
+            # Créer l'exe avec PyInstaller (nécessite d'installer PyInstaller)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.py') as f:
+                f.write(exe_content.encode())
+                temp_py = f.name
+
+            try:
+                # Envoyer l'exe au lieu du .bat
+                await thread.send(
+                    f"Found {len(media_files)} files in {processed_messages} messages.\n"
+                    f"Total size: {self._format_size(total_size)}",
+                    files=[
+                        discord.File('dist/download.exe', "download.exe"),
+                        discord.File(io.StringIO(shell_content), "download.sh")
+                    ]
+                )
+            finally:
+                os.unlink(temp_py)
 
             await status_message.edit(content=f"✅ Download ready in {thread.mention}")
 
@@ -620,15 +632,38 @@ Download last 200 videos
 
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
-        script = "@echo off\n"
-        script += "setlocal enabledelayedexpansion\n\n"
-        
-        # Demander le répertoire de destination
-        script += 'set /p "DOWNLOAD_DIR=Enter download directory path (default: Desktop/MediaDownload): " || set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
-        script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
-        script += 'mkdir "!DOWNLOAD_DIR!" 2>nul\n'
-        script += 'cd /d "!DOWNLOAD_DIR!"\n\n'
-        
+        script = """@echo off
+chcp 65001 > nul
+setlocal enabledelayedexpansion
+
+:: Style et couleurs
+color 0B
+mode con: cols=100 lines=30
+title Media Downloader - Discord Bot
+
+:: Interface
+cls
+echo.
+echo  ╔══════════════════════════════════════════════════════════════════════════════╗
+echo  ║                           Discord Media Downloader                            ║
+echo  ║                              By Arthur - v1.0                                ║
+echo  ╚══════════════════════════════════════════════════════════════════════════════╝
+echo.
+echo  [*] Initializing download sequence...
+echo  [*] Found %d media files to download
+echo.
+
+:: Demande du répertoire
+set /p "DOWNLOAD_DIR=  [?] Enter download directory path (default: Desktop/MediaDownload): " || set "DOWNLOAD_DIR=%%USERPROFILE%%\\Desktop\\MediaDownload"
+if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%%USERPROFILE%%\\Desktop\\MediaDownload"
+
+:: Création du répertoire principal
+echo.
+echo  [*] Creating directories...
+mkdir "!DOWNLOAD_DIR!" 2>nul
+cd /d "!DOWNLOAD_DIR!"
+""" % len(media_files)
+
         # Analyser les fichiers pour déterminer les dossiers nécessaires
         has_images = any(ext in attachment.filename.lower() for attachment in media_files 
                         for ext in self.bot.media_types['images'])
@@ -637,9 +672,11 @@ Download last 200 videos
         
         # Créer les dossiers nécessaires
         if has_images:
-            script += "mkdir Images 2>nul\n"
+            script += 'echo  [+] Creating Images directory...\n'
+            script += 'mkdir "Images" 2>nul\n'
         if has_videos:
-            script += "mkdir Videos 2>nul\n"
+            script += 'echo  [+] Creating Videos directory...\n'
+            script += 'mkdir "Videos" 2>nul\n'
         script += "\n"
         
         # Dictionnaire des catégories
@@ -678,8 +715,15 @@ Download last 200 videos
             'insta': 'Social\\Instagram'
         }
         
+        # Barre de progression
+        script += """
+:: Barre de progression
+set "progress=0"
+set "total=%d"
+""" % len(media_files)
+        
         # Traiter chaque fichier
-        for attachment in media_files:
+        for i, attachment in enumerate(media_files, 1):
             filename_lower = attachment.filename.lower()
             ext = os.path.splitext(filename_lower)[1]
             
@@ -701,15 +745,66 @@ Download last 200 videos
                 full_path = f"{base_folder}\\Others"
                 script += f'mkdir "{full_path}" 2>nul\n'
             
-            # Télécharger le fichier
+            # Télécharger le fichier avec barre de progression
             safe_filename = attachment.filename.replace(" ", "_")
-            script += f'if not exist "{full_path}\\{safe_filename}" (\n'
-            script += f'    curl -L -o "{full_path}\\{safe_filename}" "{attachment.url}"\n'
-            script += f')\n'
+            script += f'''
+echo  [*] Downloading: {safe_filename}
+if not exist "{full_path}\\{safe_filename}" (
+    curl -L -# -o "{full_path}\\{safe_filename}" "{attachment.url}"
+)
+set /a "progress={i}"
+call :ShowProgress !progress! !total!
+'''
+
+        # Fonction de barre de progression et fin du script
+        script += """
+:: Fin du téléchargement
+echo.
+echo  ╔══════════════════════════════════════════════════════════════════════════════╗
+echo  ║                            Download Complete!                                 ║
+echo  ╚══════════════════════════════════════════════════════════════════════════════╝
+echo.
+echo  [*] Files have been downloaded to: !DOWNLOAD_DIR!
+echo.
+pause
+exit /b
+
+:ShowProgress
+set /a "percent=%1*100/%2"
+set "progress="
+for /l %%i in (0,1,%percent%) do set "progress=!progress!█"
+echo  [!progress!] !percent!%%
+exit /b
+"""
         
-        script += "\necho Download complete!\n"
-        script += "pause\n"
         return script
+
+    def _create_exe_wrapper(self, batch_content):
+        """Create an exe wrapper for the batch script"""
+        exe_script = f'''
+import os
+import sys
+import tempfile
+import subprocess
+
+def main():
+    # Créer un fichier batch temporaire
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
+        f.write("""{batch_content}""")
+        batch_path = f.name
+    
+    try:
+        # Exécuter le batch
+        subprocess.run([batch_path], shell=True)
+    finally:
+        # Nettoyer
+        os.unlink(batch_path)
+
+if __name__ == '__main__':
+    main()
+    '''
+    
+    return exe_script
 
     def _create_shell_script(self, media_files):
         """Create Linux/Mac shell download script with automatic folder organization"""
@@ -721,26 +816,110 @@ Download last 200 videos
         script += 'mkdir -p "$DOWNLOAD_DIR"\n'
         script += 'cd "$DOWNLOAD_DIR"\n\n'
         
+        # Analyser les fichiers pour déterminer les dossiers nécessaires
+        has_images = any(ext in attachment.filename.lower() for attachment in media_files 
+                        for ext in self.bot.media_types['images'])
+        has_videos = any(ext in attachment.filename.lower() for attachment in media_files 
+                        for ext in self.bot.media_types['videos'])
+        
         # Créer les dossiers principaux
-        script += "mkdir -p Images Videos\n\n"
+        if has_images:
+            script += 'mkdir -p "Images"\n'
+        if has_videos:
+            script += 'mkdir -p "Videos"\n'
+        script += "\n"
         
-        # Fonction de gestion des doublons
-        script += 'get_unique_filename() {\n'
-        script += '    local base_path="$1"\n'
-        script += '    local base_name="$2"\n'
-        script += '    local extension="$3"\n'
-        script += '    local counter=0\n'
-        script += '    local target_file="${base_path}/${base_name}${extension}"\n'
-        script += '    while [ -f "$target_file" ]; do\n'
-        script += '        ((counter++))\n'
-        script += '        target_file="${base_path}/${base_name}_${counter}${extension}"\n'
-        script += '    done\n'
-        script += '    echo "$target_file"\n'
-        script += '}\n\n'
+        # Dictionnaire des catégories
+        script += 'declare -A categories\n'
+        script += '''
+# Games
+categories["minecraft"]="Games/Minecraft"
+categories["valorant"]="Games/Valorant"
+categories["fortnite"]="Games/Fortnite"
+categories["csgo"]="Games/CounterStrike"
+categories["cs2"]="Games/CounterStrike"
+categories["lol"]="Games/LeagueOfLegends"
+categories["league"]="Games/LeagueOfLegends"
+categories["apex"]="Games/ApexLegends"
+categories["rocket"]="Games/RocketLeague"
+categories["gta"]="Games/GTA"
+categories["cod"]="Games/CallOfDuty"
+categories["warzone"]="Games/CallOfDuty"
+
+# Applications
+categories["photoshop"]="Apps/Photoshop"
+categories["ps"]="Apps/Photoshop"
+categories["illustrator"]="Apps/Illustrator"
+categories["ai"]="Apps/Illustrator"
+categories["premiere"]="Apps/Premiere"
+categories["pr"]="Apps/Premiere"
+
+# System
+categories["desktop"]="System/Desktop"
+categories["screen"]="System/Desktop"
+categories["capture"]="System/Screenshots"
+
+# Social
+categories["discord"]="Social/Discord"
+categories["twitter"]="Social/Twitter"
+categories["instagram"]="Social/Instagram"
+categories["insta"]="Social/Instagram"
+'''
         
-        # Même dictionnaire de mots-clés que dans la version Windows
-        # [Le reste du code est similaire à la version Windows, adapté à la syntaxe bash]
+        # Fonction pour obtenir un nom de fichier unique
+        script += '''
+get_unique_filename() {
+    local filepath="$1"
+    local directory=$(dirname "$filepath")
+    local filename=$(basename "$filepath")
+    local base="${filename%.*}"
+    local ext="${filename##*.}"
+    local counter=1
+    local newpath="$filepath"
+    
+    while [[ -e "$newpath" ]]; do
+        newpath="${directory}/${base}_${counter}.${ext}"
+        ((counter++))
+    done
+    
+    echo "$newpath"
+}
+'''
         
+        # Traiter chaque fichier
+        for attachment in media_files:
+            filename_lower = attachment.filename.lower()
+            ext = os.path.splitext(filename_lower)[1]
+            safe_filename = attachment.filename.replace(" ", "_").replace('"', '\\"')
+            
+            # Déterminer le type de média
+            base_folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
+            
+            script += f'\n# Processing {safe_filename}\n'
+            script += 'found_category=false\n'
+            
+            # Vérifier chaque catégorie
+            script += 'for keyword in "${!categories[@]}"; do\n'
+            script += f'    if [[ "{filename_lower}" == *"$keyword"* ]]; then\n'
+            script += '        category="${categories[$keyword]}"\n'
+            script += f'        mkdir -p "{base_folder}/$category"\n'
+            script += f'        target_path="{base_folder}/$category/{safe_filename}"\n'
+            script += '        target_path=$(get_unique_filename "$target_path")\n'
+            script += f'        curl -L -o "$target_path" "{attachment.url}"\n'
+            script += '        found_category=true\n'
+            script += '        break\n'
+            script += '    fi\n'
+            script += 'done\n\n'
+            
+            # Si aucune catégorie trouvée, mettre dans Others
+            script += 'if [ "$found_category" = false ]; then\n'
+            script += f'    mkdir -p "{base_folder}/Others"\n'
+            script += f'    target_path="{base_folder}/Others/{safe_filename}"\n'
+            script += '    target_path=$(get_unique_filename "$target_path")\n'
+            script += f'    curl -L -o "$target_path" "{attachment.url}"\n'
+            script += 'fi\n'
+        
+        script += '\necho "Download complete!"\n'
         return script
 
 bot = MediaDownload()
