@@ -285,45 +285,46 @@ if __name__ == '__main__':
 
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
-        script = """@echo off
-chcp 65001 > nul
-setlocal enabledelayedexpansion
+        script = (
+            "@echo off\n"
+            "chcp 65001 > nul\n"
+            "setlocal enabledelayedexpansion\n\n"
+            ":: Style et couleurs\n"
+            "color 0B\n"
+            "mode con: cols=100 lines=30\n"
+            "title Media Downloader - Discord Bot\n"
+        )
 
-:: Style et couleurs
-color 0B
-mode con: cols=100 lines=30
-title Media Downloader - Discord Bot
+        # Interface
+        script += (
+            "\n:: Interface\n"
+            "cls\n"
+            "echo.\n"
+            "echo  ╔══════════════════════════════════════════════════════════════════════════════╗\n"
+            "echo  ║                           Discord Media Downloader                            ║\n"
+            "echo  ║                              By Arthur - v1.0                                ║\n"
+            "echo  ╚══════════════════════════════════════════════════════════════════════════════╝\n"
+            "echo.\n"
+            f"echo  [*] Initializing download sequence...\n"
+            f"echo  [*] Found {len(media_files)} media files to download\n"
+            "echo.\n\n"
+            ":: Demande du répertoire\n"
+            'set /p "DOWNLOAD_DIR=  [?] Enter download directory path (default: Desktop/MediaDownload): " || '
+            'set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
+            'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n\n'
+            ":: Création du répertoire principal\n"
+            "echo.\n"
+            'echo  [*] Creating directories...\n'
+            'mkdir "!DOWNLOAD_DIR!" 2>nul\n'
+            'cd /d "!DOWNLOAD_DIR!"\n'
+        )
 
-:: Interface
-cls
-echo.
-echo  ╔══════════════════════════════════════════════════════════════════════════════╗
-echo  ║                           Discord Media Downloader                            ║
-echo  ║                              By Arthur - v1.0                                ║
-echo  ╚══════════════════════════════════════════════════════════════════════════════╝
-echo.
-echo  [*] Initializing download sequence...
-echo  [*] Found %d media files to download
-echo.
-
-:: Demande du répertoire
-set /p "DOWNLOAD_DIR=  [?] Enter download directory path (default: Desktop/MediaDownload): " || set "DOWNLOAD_DIR=%%USERPROFILE%%\\Desktop\\MediaDownload"
-if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%%USERPROFILE%%\\Desktop\\MediaDownload"
-
-:: Création du répertoire principal
-echo.
-echo  [*] Creating directories...
-mkdir "!DOWNLOAD_DIR!" 2>nul
-cd /d "!DOWNLOAD_DIR!"
-""" % len(media_files)
-
-        # Analyser les fichiers pour déterminer les dossiers nécessaires
+        # Analyse et création des dossiers
         has_images = any(ext in attachment.filename.lower() for attachment in media_files 
                         for ext in self.bot.media_types['images'])
         has_videos = any(ext in attachment.filename.lower() for attachment in media_files 
                         for ext in self.bot.media_types['videos'])
         
-        # Créer les dossiers nécessaires
         if has_images:
             script += 'echo  [+] Creating Images directory...\n'
             script += 'mkdir "Images" 2>nul\n'
@@ -491,7 +492,7 @@ categories["twitter"]="Social/Twitter"
 categories["instagram"]="Social/Instagram"
 categories["insta"]="Social/Instagram"
 '''
-        
+
         # Fonction pour obtenir un nom de fichier unique
         script += '''
 get_unique_filename() {
@@ -688,95 +689,88 @@ Download last 200 videos
             await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
             status_message = await interaction.original_response()
 
-            # Debug pour vérifier les valeurs
-            print(f"Type sélectionné: {type.value}")
-            print(f"Nombre de messages: {number.value}")
-
-            # Conversion du type
+            # Paramètres de recherche
             type_key = type.value
-
-            # Gestion du nombre de messages (0 signifie "tous les messages")
             limit = None if number.value == 0 else number.value
             
+            # Variables de suivi
             media_files = []
             total_size = 0
             processed_messages = 0
             start_time = time.time()
             
+            # Recherche des médias
             async with interaction.channel.typing():
                 async for message in interaction.channel.history(limit=limit):
-                    if time.time() - start_time > 300:  # 5 minutes timeout
+                    # Vérification du timeout (5 minutes)
+                    if time.time() - start_time > 300:
                         await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
                         return
 
+                    # Mise à jour du statut
                     processed_messages += 1
-                    if processed_messages % 100 == 0:  # Mise à jour tous les 100 messages
+                    if processed_messages % 100 == 0:
                         await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
                     
-                    try:
-                        for attachment in message.attachments:
-                            # Debug pour voir les fichiers trouvés
-                            print(f"Vérification du fichier: {attachment.filename}")
-                            
-                            # Vérification du type de fichier
-                            ext = os.path.splitext(attachment.filename.lower())[1]
-                            valid = False
+                    # Analyse des pièces jointes
+                    for attachment in message.attachments:
+                        ext = os.path.splitext(attachment.filename.lower())[1]
+                        
+                        # Vérification du type de fichier
+                        valid = False
+                        if type_key == "images" and ext in self.bot.media_types['images']:
+                            valid = True
+                        elif type_key == "videos" and ext in self.bot.media_types['videos']:
+                            valid = True
+                        elif type_key == "all" and ext in self.bot.media_types['all']:
+                            valid = True
 
-                            if type_key == "images" and ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
-                                valid = True
-                            elif type_key == "videos" and ext in ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv']:
-                                valid = True
-                            elif type_key == "all":
-                                valid = ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', 
-                                              '.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv']
-
-                            if valid:
-                                print(f"Fichier valide trouvé: {attachment.filename}")
-                                media_files.append(attachment)
-                                total_size += attachment.size
-                    
-                    except Exception as e:
-                        print(f"Erreur lors de l'analyse d'un message: {e}")
-                        continue
+                        if valid:
+                            media_files.append(attachment)
+                            total_size += attachment.size
 
             if not media_files:
                 await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
                 return
 
-            # Create download scripts
+            # Création du script batch
             batch_content = self._create_batch_script(media_files)
-            exe_content = self._create_exe_wrapper(batch_content)
-            shell_content = self._create_shell_script(media_files)
-
-            # Create thread for downloads
+            
+            # Création du thread pour les téléchargements
             thread = await interaction.channel.create_thread(
                 name=f"📥 Download {type_key} ({len(media_files)} files)",
                 type=discord.ChannelType.public_thread
             )
 
-            # Créer l'exe avec PyInstaller (nécessite d'installer PyInstaller)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.py') as f:
-                f.write(exe_content.encode())
-                temp_py = f.name
+            # Envoi des fichiers
+            summary = (
+                "╔══════════════════════════════════════════╗\n"
+                "    📥 Media Download Summary\n"
+                "╚══════════════════════════════════════════╝\n\n"
+                f"✓ Found: {len(media_files)} files\n"
+                f"✓ Messages analyzed: {processed_messages}\n"
+                f"✓ Total size: {self._format_size(total_size)}\n\n"
+                "ℹ️ Instructions:\n"
+                "1. Download the script\n"
+                "2. Run it on your computer\n"
+                "3. Choose download location\n"
+                "4. Wait for completion"
+            )
 
-            try:
-                # Envoyer l'exe au lieu du .bat
-                await thread.send(
-                    f"Found {len(media_files)} files in {processed_messages} messages.\n"
-                    f"Total size: {self._format_size(total_size)}",
-                    files=[
-                        discord.File('dist/download.exe', "download.exe"),
-                        discord.File(io.StringIO(shell_content), "download.sh")
-                    ]
-                )
-            finally:
-                os.unlink(temp_py)
+            await thread.send(
+                content=summary,
+                files=[
+                    discord.File(io.StringIO(batch_content),
+                    discord.File(io.StringIO(self._create_shell_script(media_files)),
+                                filename="download.sh")
+                ]
+            )
 
             await status_message.edit(content=f"✅ Download ready in {thread.mention}")
 
         except Exception as e:
-            print(f"Erreur dans download_media: {e}")
-            await interaction.followup.send(f"❌ Une erreur est survenue: {str(e)}", ephemeral=True)
+            print(f"Error in download_media: {e}")
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
