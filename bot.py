@@ -273,10 +273,10 @@ class DownloadCog(commands.Cog):
             if self.topgg_client:
                 has_voted = await self.topgg_client.get_user_vote(user_id)
                 return has_voted
-            return True  # En mode développement si pas de client Top.gg
+            return False  # Si pas de client Top.gg, on refuse l'accès
         except Exception as e:
             print(f"Erreur Top.gg: {e}")
-            return True  # En mode développement, retourne True en cas d'erreur
+            return False  # En cas d'erreur, on refuse l'accès
 
     def _create_exe_wrapper(self, batch_content):
         """Create an exe wrapper for the batch script"""
@@ -659,7 +659,7 @@ Download last 200 videos
                         "• Get access to all features\n"
                         "• Help us grow\n\n"
                         "🔗 **Vote Link**\n"
-                        "[Click here to vote](https://top.gg/bot/YOUR_BOT_ID/vote)\n\n"
+                        "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
                         "✨ **Free Features**\n"
                         "• Download up to 50 messages\n"
                         "• Download specific media types\n"
