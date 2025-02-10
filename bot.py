@@ -91,6 +91,10 @@ class MediaDownload(commands.Bot):
                         )
                 self.last_heartbeat = current_time
                 
+                # Store last heartbeat
+                with open('last_heartbeat.txt', 'w') as f:
+                    f.write(self.last_heartbeat.isoformat())
+                
                 if self.last_heartbeat:
                     time_since_last = (current_time - self.last_heartbeat).total_seconds()
                     if time_since_last > self.alert_threshold:
@@ -246,42 +250,6 @@ class MediaDownload(commands.Bot):
                 error_message=f"```py\n{str(error)}\n```",
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
-
-    async def heartbeat(self):
-        """Heartbeat monitoring with consistent styling"""
-        while not self.is_closed():
-            try:
-                current_time = datetime.now()
-                self.last_heartbeat = current_time
-                
-                if self.logs_channel:
-                    # Store last heartbeat
-                    with open('last_heartbeat.txt', 'w') as f:
-                        f.write(self.last_heartbeat.isoformat())
-                    
-                    # Check for delays
-                    if self.last_heartbeat:
-                        time_since_last = (current_time - self.last_heartbeat).total_seconds()
-                        if time_since_last > self.alert_threshold:
-                            await self.log_event(
-                                "⚠️ Service Alert",
-                                "Bot is experiencing delays",
-                                0xff9900,
-                                last_response=f"{time_since_last:.1f} seconds ago",
-                                status="Investigating"
-                            )
-                
-                await asyncio.sleep(30)
-            except Exception as e:
-                print(f"Error in heartbeat: {e}")
-                if self.logs_channel:
-                    await self.log_event(
-                        "🔴 Heartbeat Error",
-                        "Error in heartbeat monitoring",
-                        0xe74c3c,
-                        error=f"```{str(e)}```"
-                    )
-                await asyncio.sleep(30)
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
@@ -778,33 +746,6 @@ exit /b
 """
         
         return script
-
-    def _create_exe_wrapper(self, batch_content):
-        """Create an exe wrapper for the batch script"""
-        exe_script = f'''
-import os
-import sys
-import tempfile
-import subprocess
-
-def main():
-    # Créer un fichier batch temporaire
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
-        f.write("""{batch_content}""")
-        batch_path = f.name
-    
-    try:
-        # Exécuter le batch
-        subprocess.run([batch_path], shell=True)
-    finally:
-        # Nettoyer
-        os.unlink(batch_path)
-
-if __name__ == '__main__':
-    main()
-    '''
-    
-    return exe_script
 
     def _create_shell_script(self, media_files):
         """Create Linux/Mac shell download script with automatic folder organization"""
