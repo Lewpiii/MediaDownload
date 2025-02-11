@@ -87,8 +87,12 @@ class MediaDownload(commands.Bot):
                 total_users = sum(g.member_count for g in self.guilds)
                 total_servers = len(self.guilds)
 
-                # Alterner le statut
-                status_text = f"regarde /help for {total_servers} servers" if current_time.second % 10 < 5 else f"regarde /help for {total_users} users"
+                # Alterner le statut entre utilisateurs et serveurs
+                if current_time.second % 10 < 5:
+                    status_text = f"regarde /help for {total_users} users"
+                else:
+                    status_text = f"regarde /help for {total_servers} servers"
+                    
                 activity = discord.Activity(type=discord.ActivityType.watching, name=status_text)
                 await self.change_presence(activity=activity)
 
