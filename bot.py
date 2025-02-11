@@ -75,13 +75,20 @@ class MediaDownload(commands.Bot):
             await self.tree.sync()
             print("✅ Slash commands synced!")
             
-            # Status fixe
+            # Status avec indication de l'environnement
             total_users = sum(g.member_count for g in self.guilds)
+            status_text = f"/help for {total_users} users"
+            if self.env == 'dev':
+                status_text = f"[DEV] {status_text}"
+            
             activity = discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"/help for {total_users} users"
+                name=status_text
             )
+            
+            # Vérifiez si le bot est prêt avant de changer le statut
             await self.change_presence(activity=activity)
+            print(f"✅ Status set to: {status_text}")
             
             # Démarrer le heartbeat
             self.loop.create_task(self.heartbeat_task())
