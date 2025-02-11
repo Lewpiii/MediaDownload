@@ -75,21 +75,6 @@ class MediaDownload(commands.Bot):
             await self.tree.sync()
             print("✅ Slash commands synced!")
             
-            # Status avec indication de l'environnement
-            total_users = sum(g.member_count for g in self.guilds)
-            status_text = f"/help for {total_users} users"
-            if self.env == 'dev':
-                status_text = f"[DEV] {status_text}"
-            
-            activity = discord.Activity(
-                type=discord.ActivityType.watching,
-                name=status_text
-            )
-            
-            # Vérifiez si le bot est prêt avant de changer le statut
-            await self.change_presence(activity=activity)
-            print(f"✅ Status set to: {status_text}")
-            
             # Démarrer le heartbeat
             self.loop.create_task(self.heartbeat_task())
         except Exception as e:
@@ -99,6 +84,14 @@ class MediaDownload(commands.Bot):
         while not self.is_closed():
             try:
                 current_time = datetime.now()
+                total_users = sum(g.member_count for g in self.guilds)
+                total_servers = len(self.guilds)
+
+                # Alterner le statut
+                status_text = f"regarde /help for {total_servers} servers" if current_time.second % 10 < 5 else f"regarde /help for {total_users} users"
+                activity = discord.Activity(type=discord.ActivityType.watching, name=status_text)
+                await self.change_presence(activity=activity)
+
                 if self.webhook_url:
                     async with aiohttp.ClientSession() as session:
                         webhook = discord.Webhook.from_url(self.webhook_url, session=session)
@@ -110,17 +103,6 @@ class MediaDownload(commands.Bot):
                 # Store last heartbeat
                 with open('last_heartbeat.txt', 'w') as f:
                     f.write(self.last_heartbeat.isoformat())
-                
-                if self.last_heartbeat:
-                    time_since_last = (current_time - self.last_heartbeat).total_seconds()
-                    if time_since_last > self.alert_threshold:
-                        await self.log_event(
-                            "⚠️ Service Alert",
-                            "Bot is experiencing delays",
-                            0xff9900,
-                            last_response=f"{time_since_last:.1f} seconds ago",
-                            status="Investigating"
-                        )
                 
                 await asyncio.sleep(300)  # 5 minutes
             except Exception as e:
