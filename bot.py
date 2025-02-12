@@ -13,7 +13,6 @@ import time
 import tempfile
 import subprocess
 import topgg
-import json
 from counters import download_count, successful_downloads, failed_downloads
 
 # Configuration
@@ -45,6 +44,10 @@ class MediaDownload(commands.Bot):
         intents.messages = True
         super().__init__(command_prefix='!', intents=intents)
         
+        # Initialisation des compteurs
+        self.download_count = download_count
+        self.successful_downloads = successful_downloads
+        self.failed_downloads = failed_downloads
         self.start_time = datetime.now()
         self.logs_channel = None
         self.webhook_url = WEBHOOK_URL
@@ -52,9 +55,6 @@ class MediaDownload(commands.Bot):
         self.last_heartbeat = None
         
         # Statistiques de téléchargement
-        self.download_count = download_count
-        self.successful_downloads = successful_downloads
-        self.failed_downloads = failed_downloads
         self.downloads_by_type = {
             'images': 0,
             'videos': 0,
@@ -69,7 +69,6 @@ class MediaDownload(commands.Bot):
         }
         # Remplir la liste 'all' avec toutes les extensions
         self.media_types['all'] = [ext for types in [self.media_types['images'], self.media_types['videos']] for ext in types]
-        self.load_counters()  # Charger les compteurs au démarrage
 
     async def setup_hook(self):
         try:
@@ -259,26 +258,6 @@ class MediaDownload(commands.Bot):
                 error_message=f"```py\n{str(error)}\n```",
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
-
-    def load_counters(self):
-        """Load download counters from a JSON file."""
-        if os.path.exists('counters.json'):
-            with open('counters.json', 'r') as f:
-                try:
-                    data = json.load(f)
-                    self.download_count = data.get('download_count', 0)
-                    self.successful_downloads = data.get('successful_downloads', 0)
-                    self.failed_downloads = data.get('failed_downloads', 0)
-                except json.JSONDecodeError:
-                    print("❌ Error decoding JSON, initializing counters to 0.")
-                    self.download_count = 0
-                    self.successful_downloads = 0
-                    self.failed_downloads = 0
-        else:
-            print("⚠️ counters.json not found, initializing counters to 0.")
-            self.download_count = 0
-            self.successful_downloads = 0
-            self.failed_downloads = 0
 
     def save_counters(self):
         """Save download counters to a Python file."""
@@ -637,9 +616,9 @@ Download last 200 videos
             embed.add_field(
                 name="📥 Statistiques de Téléchargement",
                 value=f"""
-                **Total Downloads:** {self.bot.download_count}
-                **Réussis:** {self.bot.successful_downloads}
-                **Échoués:** {self.bot.failed_downloads}
+                **Total Downloads:** {self.download_count}
+                **Réussis:** {self.successful_downloads}
+                **Échoués:** {self.failed_downloads}
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
@@ -753,7 +732,7 @@ Download last 200 videos
                 return
 
             # Incrémenter le compteur de téléchargements
-            self.bot.download_count += len(media_files)
+            self.download_count += len(media_files)
 
             # Création du script batch
             batch_content = self._create_batch_script(media_files)
@@ -788,17 +767,17 @@ Download last 200 videos
             )
 
             # Incrémenter le compteur de téléchargements réussis
-            self.bot.successful_downloads += len(media_files)
+            self.successful_downloads += len(media_files)
 
             # Sauvegarder les compteurs après chaque téléchargement réussi
-            self.bot.save_counters()
+            self.save_counters()
 
             await status_message.edit(content=f"✅ Download ready in {thread.mention}")
 
         except Exception as e:
             print(f"Error in download_media: {e}")
-            self.bot.failed_downloads += 1  # Incrémenter le compteur d'échecs
-            self.bot.save_counters()  # Sauvegarder les compteurs même en cas d'échec
+            self.failed_downloads += 1  # Incrémenter le compteur d'échecs
+            self.save_counters()  # Sauvegarder les compteurs même en cas d'échec
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
