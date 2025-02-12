@@ -616,9 +616,9 @@ Download last 200 videos
             embed.add_field(
                 name="📥 Statistiques de Téléchargement",
                 value=f"""
-                **Total Downloads:** {self.download_count}
-                **Réussis:** {self.successful_downloads}
-                **Échoués:** {self.failed_downloads}
+                **Total Downloads:** {self.bot.download_count}
+                **Réussis:** {self.bot.successful_downloads}
+                **Échoués:** {self.bot.failed_downloads}
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
@@ -721,7 +721,7 @@ Download last 200 videos
                 return
 
             # Incrémenter le compteur de téléchargements
-            self.download_count += len(media_files)
+            self.bot.download_count += len(media_files)
 
             # Création du script batch
             batch_content = self._create_batch_script(media_files)
@@ -756,7 +756,7 @@ Download last 200 videos
             )
 
             # Incrémenter le compteur de téléchargements réussis
-            self.successful_downloads += len(media_files)
+            self.bot.successful_downloads += len(media_files)
 
             # Sauvegarder les compteurs après chaque téléchargement réussi
             self.bot.save_counters()
@@ -765,7 +765,7 @@ Download last 200 videos
 
         except Exception as e:
             print(f"Error in download_media: {e}")
-            self.failed_downloads += 1  # Incrémenter le compteur d'échecs
+            self.bot.failed_downloads += 1  # Incrémenter le compteur d'échecs
             self.bot.save_counters()  # Sauvegarder les compteurs même en cas d'échec
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
