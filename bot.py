@@ -14,6 +14,7 @@ import tempfile
 import subprocess
 import topgg
 import json
+from counters import download_count, successful_downloads, failed_downloads
 
 # Configuration
 load_dotenv()
@@ -51,9 +52,9 @@ class MediaDownload(commands.Bot):
         self.last_heartbeat = None
         
         # Statistiques de téléchargement
-        self.download_count = 0
-        self.successful_downloads = 0
-        self.failed_downloads = 0
+        self.download_count = download_count
+        self.successful_downloads = successful_downloads
+        self.failed_downloads = failed_downloads
         self.downloads_by_type = {
             'images': 0,
             'videos': 0,
@@ -263,20 +264,28 @@ class MediaDownload(commands.Bot):
         """Load download counters from a JSON file."""
         if os.path.exists('counters.json'):
             with open('counters.json', 'r') as f:
-                data = json.load(f)
-                self.download_count = data.get('download_count', 0)
-                self.successful_downloads = data.get('successful_downloads', 0)
-                self.failed_downloads = data.get('failed_downloads', 0)
+                try:
+                    data = json.load(f)
+                    self.download_count = data.get('download_count', 0)
+                    self.successful_downloads = data.get('successful_downloads', 0)
+                    self.failed_downloads = data.get('failed_downloads', 0)
+                except json.JSONDecodeError:
+                    print("❌ Error decoding JSON, initializing counters to 0.")
+                    self.download_count = 0
+                    self.successful_downloads = 0
+                    self.failed_downloads = 0
+        else:
+            print("⚠️ counters.json not found, initializing counters to 0.")
+            self.download_count = 0
+            self.successful_downloads = 0
+            self.failed_downloads = 0
 
     def save_counters(self):
-        """Save download counters to a JSON file."""
-        data = {
-            'download_count': self.download_count,
-            'successful_downloads': self.successful_downloads,
-            'failed_downloads': self.failed_downloads
-        }
-        with open('counters.json', 'w') as f:
-            json.dump(data, f)
+        """Save download counters to a Python file."""
+        with open('counters.py', 'w') as f:
+            f.write(f"download_count = {self.download_count}\n")
+            f.write(f"successful_downloads = {self.successful_downloads}\n")
+            f.write(f"failed_downloads = {self.failed_downloads}\n")
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
