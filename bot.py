@@ -197,6 +197,10 @@ class MediaDownload(commands.Bot):
 
     async def on_guild_join(self, guild):
         if self.logs_channel:
+            # Récupérer le propriétaire du serveur
+            owner = guild.get_member(guild.owner_id)  # Récupérer l'objet membre du propriétaire
+            owner_name = owner.name if owner else "Unknown"  # Vérifier si le propriétaire existe
+
             embed = discord.Embed(
                 title="✨ New Server",
                 description=f"Bot has been added to a new server\n━━━━━━━━━━━━━━━━━━━━━━",
@@ -208,7 +212,7 @@ class MediaDownload(commands.Bot):
                 value=f"""
                 **Name:** {guild.name}
                 **ID:** {guild.id}
-                **Owner:** {guild.owner}
+                **Owner:** {owner_name} (ID: {guild.owner_id})
                 **Members:** {guild.member_count}
                 **Created:** <t:{int(guild.created_at.timestamp())}:R>
                 ━━━━━━━━━━━━━━━━
