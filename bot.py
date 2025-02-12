@@ -722,6 +722,9 @@ Download last 200 videos
                 await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
                 return
 
+            # Incrémenter le compteur de téléchargements
+            self.bot.download_count += len(media_files)
+
             # Création du script batch
             batch_content = self._create_batch_script(media_files)
             
@@ -749,15 +752,19 @@ Download last 200 videos
             await thread.send(
                 content=summary,
                 files=[
-                    discord.File(io.StringIO(batch_content), "download.bat"),
+                    discord.File(io.StringIO(batch_content)),
                     discord.File(io.StringIO(self._create_shell_script(media_files)), "download.sh")
                 ]
             )
+
+            # Incrémenter le compteur de téléchargements réussis
+            self.bot.successful_downloads += len(media_files)
 
             await status_message.edit(content=f"✅ Download ready in {thread.mention}")
 
         except Exception as e:
             print(f"Error in download_media: {e}")
+            self.bot.failed_downloads += 1  # Incrémenter le compteur d'échecs
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
