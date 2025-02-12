@@ -644,6 +644,17 @@ Download last 200 videos
                 """,
                 inline=False
             )
+            
+            embed.add_field(
+                name="📁 Par Type de Fichier",
+                value=f"""
+                **Images:** {self.bot.downloads_by_type['images']}
+                **Vidéos:** {self.bot.downloads_by_type['videos']}
+                **Tous Fichiers:** {self.bot.downloads_by_type['all']}
+                ━━━━━━━━━━━━━━━━
+                """,
+                inline=False
+            )
 
             await interaction.response.send_message(embed=embed)
         except Exception as e:
