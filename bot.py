@@ -6,12 +6,9 @@ import io
 from datetime import datetime
 from dotenv import load_dotenv
 import asyncio
-import sys
 import traceback
 import aiohttp
 import time
-import tempfile
-import subprocess
 import topgg
 from counters import download_count, successful_downloads, failed_downloads
 import requests
