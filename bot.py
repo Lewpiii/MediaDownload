@@ -595,30 +595,30 @@ Download last 200 videos
             uptime = datetime.now() - self.bot.start_time
             
             embed = discord.Embed(
-                title="📊 Statistiques du Bot",
-                description="Informations système et statistiques\n━━━━━━━━━━━━━━━━━━━━━━",
+                title="📊 Bot Statistics",
+                description="System information and statistics\n━━━━━━━━━━━━━━━━━━━━━━",
                 color=self.color
             )
             
             embed.add_field(
-                name="📈 Statistiques Générales",
+                name="📈 General Statistics",
                 value=f"""
-                **Serveurs:** {len(self.bot.guilds)}
-                **Utilisateurs:** {total_users:,}
-                **Canaux:** {total_channels:,}
+                **Servers:** {len(self.bot.guilds)}
+                **Users:** {total_users:,}
+                **Channels:** {total_channels:,}
                 **Uptime:** {str(uptime).split('.')[0]}
-                **Latence:** {round(self.bot.latency * 1000)}ms
+                **Latency:** {round(self.bot.latency * 1000)}ms
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
             )
             
             embed.add_field(
-                name="📥 Statistiques de Téléchargement",
+                name="📥 Download Statistics",
                 value=f"""
                 **Total Downloads:** {self.bot.download_count}
-                **Réussis:** {self.bot.successful_downloads}
-                **Échoués:** {self.bot.failed_downloads}
+                **Successful:** {self.bot.successful_downloads}
+                **Failed:** {self.bot.failed_downloads}
                 ━━━━━━━━━━━━━━━━
                 """,
                 inline=False
@@ -627,7 +627,7 @@ Download last 200 videos
             await interaction.response.send_message(embed=embed)
         except Exception as e:
             await interaction.response.send_message(
-                f"Une erreur est survenue: {str(e)}", 
+                f"An error occurred: {str(e)}", 
                 ephemeral=True
             )
 
