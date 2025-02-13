@@ -15,6 +15,7 @@ import subprocess
 import topgg
 from counters import download_count, successful_downloads, failed_downloads
 import requests
+import psutil
 
 # Configuration
 load_dotenv()
@@ -70,6 +71,13 @@ class MediaDownload(commands.Bot):
         }
         # Remplir la liste 'all' avec toutes les extensions
         self.media_types['all'] = [ext for types in [self.media_types['images'], self.media_types['videos']] for ext in types]
+
+    def log_memory_usage(self):
+        """Log the current memory usage."""
+        memory_info = psutil.virtual_memory()
+        used_memory = memory_info.used / (1024 ** 2)  # Convertir en Mo
+        total_memory = memory_info.total / (1024 ** 2)  # Convertir en Mo
+        print(f"Memory Usage: {used_memory:.2f} MB / {total_memory:.2f} MB ({memory_info.percent}%)")
 
     async def setup_hook(self):
         try:
@@ -151,6 +159,8 @@ class MediaDownload(commands.Bot):
         print(f"✅ Logged in as {self.user}")
         print(f"🌐 In {len(self.guilds)} servers")
         
+        self.log_memory_usage()  # Log memory usage on startup
+
         if LOGS_CHANNEL_ID:
             self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
             if self.logs_channel:
@@ -323,16 +333,9 @@ if __name__ == '__main__':
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
         script = "@echo off\n"
-        script += "setlocal enabledelayedexpansion\n"
-        
-        # Demander à l'utilisateur de choisir le répertoire de téléchargement
-        script += 'set /p "DOWNLOAD_DIR=  [?] Enter download directory path (default: Desktop\\MediaDownload): " || '
-        script += 'set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
-        script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n\n'
-        
-        # Créer le répertoire de téléchargement
-        script += "mkdir \"!DOWNLOAD_DIR!\" 2>nul\n"
-        script += "cd /d \"!DOWNLOAD_DIR!\"\n\n"
+        script += "cd %USERPROFILE%\\Desktop\n"
+        script += "mkdir MediaDownload 2>nul\n"
+        script += "cd MediaDownload\n\n"
         
         # Créer les dossiers principaux
         script += "mkdir Images 2>nul\n"
@@ -391,136 +394,72 @@ if __name__ == '__main__':
                 script += f'curl -L -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
             script += "\n"
         
-        # Fin du script avec une meilleure présentation
-        script += """
-:: Fin du téléchargement
-echo.
-echo  ================================
-echo          Download Complete!
-echo  ================================
-echo.
-echo  Files have been downloaded to: !DOWNLOAD_DIR!
-echo.
-pause
-exit /b
-"""
-        
         return script
 
     def _create_shell_script(self, media_files):
         """Create Linux/Mac shell download script with automatic folder organization"""
-        script = "#!/bin/bash\n\n"
-        
-        # Demander le répertoire de destination
-        script += 'read -p "Enter download directory path (default: ~/Desktop/MediaDownload): " DOWNLOAD_DIR\n'
-        script += 'DOWNLOAD_DIR=${DOWNLOAD_DIR:-"$HOME/Desktop/MediaDownload"}\n'
-        script += 'mkdir -p "$DOWNLOAD_DIR"\n'
-        script += 'cd "$DOWNLOAD_DIR"\n\n'
-        
-        # Analyser les fichiers pour déterminer les dossiers nécessaires
-        has_images = any(ext in attachment.filename.lower() for attachment in media_files 
-                        for ext in self.bot.media_types['images'])
-        has_videos = any(ext in attachment.filename.lower() for attachment in media_files 
-                        for ext in self.bot.media_types['videos'])
+        script = "#!/bin/bash\n"
+        script += "cd ~/Desktop\n"
+        script += "mkdir -p MediaDownload\n"
+        script += "cd MediaDownload\n\n"
         
         # Créer les dossiers principaux
-        if has_images:
-            script += 'mkdir -p "Images"\n'
-        if has_videos:
-            script += 'mkdir -p "Videos"\n'
-        script += "\n"
+        script += "mkdir -p Images\n"
+        script += "mkdir -p Videos\n\n"
         
-        # Dictionnaire des catégories
-        script += 'declare -A categories\n'
-        script += '''
-# Games
-categories["minecraft"]="Games/Minecraft"
-categories["valorant"]="Games/Valorant"
-categories["fortnite"]="Games/Fortnite"
-categories["csgo"]="Games/CounterStrike"
-categories["cs2"]="Games/CounterStrike"
-categories["lol"]="Games/LeagueOfLegends"
-categories["league"]="Games/LeagueOfLegends"
-categories["apex"]="Games/ApexLegends"
-categories["rocket"]="Games/RocketLeague"
-categories["gta"]="Games/GTA"
-categories["cod"]="Games/CallOfDuty"
-categories["warzone"]="Games/CallOfDuty"
-
-# Applications
-categories["photoshop"]="Apps/Photoshop"
-categories["ps"]="Apps/Photoshop"
-categories["illustrator"]="Apps/Illustrator"
-categories["ai"]="Apps/Illustrator"
-categories["premiere"]="Apps/Premiere"
-categories["pr"]="Apps/Premiere"
-
-# System
-categories["desktop"]="System/Desktop"
-categories["screen"]="System/Desktop"
-categories["capture"]="System/Screenshots"
-
-# Social
-categories["discord"]="Social/Discord"
-categories["twitter"]="Social/Twitter"
-categories["instagram"]="Social/Instagram"
-categories["insta"]="Social/Instagram"
-'''
-
-        # Fonction pour obtenir un nom de fichier unique
-        script += '''
-get_unique_filename() {
-    local filepath="$1"
-    local directory=$(dirname "$filepath")
-    local filename=$(basename "$filepath")
-    local base="${filename%.*}"
-    local ext="${filename##*.}"
-    local counter=1
-    local newpath="$filepath"
-    
-    while [[ -e "$newpath" ]]; do
-        newpath="${directory}/${base}_${counter}.${ext}"
-        ((counter++))
-    done
-    
-    echo "$newpath"
-}
-'''
-        
-        # Traiter chaque fichier
+        # Organiser les fichiers par type et nom
+        organized_files = {}
         for attachment in media_files:
+            # Déterminer le type (image ou vidéo)
+            ext = os.path.splitext(attachment.filename.lower())[1]
+            file_type = "Images" if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'] else "Videos"
+            
+            # Extraire le nom du dossier à partir du nom du fichier
+            folder_name = None
             filename_lower = attachment.filename.lower()
-            ext = os.path.splitext(filename_lower)[1]
-            safe_filename = attachment.filename.replace(" ", "_").replace('"', '\\"')
             
-            # Déterminer le type de média
-            base_folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
+            # Liste des mots-clés pour la détection automatique des dossiers
+            keywords = {
+                'minecraft': 'Minecraft',
+                'valorant': 'Valorant',
+                'fortnite': 'Fortnite',
+                'csgo': 'CSGO',
+                'cs2': 'CS2',
+                'lol': 'LeagueOfLegends',
+                'league': 'LeagueOfLegends',
+                'apex': 'ApexLegends',
+                'rocket': 'RocketLeague',
+                'gta': 'GTA',
+                'cod': 'CallOfDuty',
+                'warzone': 'Warzone',
+                # Ajoutez d'autres mots-clés selon vos besoins
+            }
             
-            script += f'\n# Processing {safe_filename}\n'
-            script += 'found_category=false\n'
+            # Chercher les mots-clés dans le nom du fichier
+            for keyword, folder in keywords.items():
+                if keyword in filename_lower:
+                    folder_name = folder
+                    break
             
-            # Vérifier chaque catégorie
-            script += 'for keyword in "${!categories[@]}"; do\n'
-            script += f'    if [[ "{filename_lower}" == *"$keyword"* ]]; then\n'
-            script += '        category="${categories[$keyword]}"\n'
-            script += f'        mkdir -p "{base_folder}/$category"\n'
-            script += f'        target_path="{base_folder}/$category/{safe_filename}"\n'
-            script += '        target_path=$(get_unique_filename "$target_path")\n'
-            script += f'        curl -L -o "$target_path" "{attachment.url}"\n'
-            script += '        found_category=true\n'
-            script += '        break\n'
-            script += '    fi\n'
-            script += 'done\n\n'
+            if not folder_name:
+                folder_name = "Others"
             
-            # Si aucune catégorie trouvée, mettre dans Others
-            script += 'if [ "$found_category" = false ]; then\n'
-            script += f'    mkdir -p "{base_folder}/Others"\n'
-            script += f'    target_path="{base_folder}/Others/{safe_filename}"\n'
-            script += '    target_path=$(get_unique_filename "$target_path")\n'
-            script += f'    curl -L -o "$target_path" "{attachment.url}"\n'
-            script += 'fi\n'
+            # Créer la clé de classification
+            key = f"{file_type}/{folder_name}"
+            if key not in organized_files:
+                organized_files[key] = []
+            organized_files[key].append(attachment)
         
-        script += '\necho "Download complete!"\n'
+        # Créer les dossiers et télécharger les fichiers
+        for folder_path, files in organized_files.items():
+            main_type, subfolder = folder_path.split('/')
+            script += f'mkdir -p "{main_type}/{subfolder}"\n'
+            
+            for attachment in files:
+                safe_filename = attachment.filename.replace(" ", "_")
+                script += f'curl -L -o "{main_type}/{subfolder}/{safe_filename}" "{attachment.url}"\n'
+            script += "\n"
+        
         return script
 
     @app_commands.command(name="help", description="Shows bot help")
@@ -644,7 +583,7 @@ Download last 200 videos
             app_commands.Choice(name="100 messages", value=100),
             app_commands.Choice(name="500 messages", value=500),
             app_commands.Choice(name="1000 messages", value=1000),
-            app_commands.Choice(name="All messages", value=0)
+            app_commands.Choice(name="All messages", value=999999)
         ]
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
