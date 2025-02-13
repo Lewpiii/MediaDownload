@@ -97,9 +97,7 @@ class MediaDownload(commands.Bot):
 
                 # Alterner le statut entre utilisateurs et serveurs
                 if current_time.second % 10 < 5:
-                    status_text = f"/help for {total_users} users"
-                else:
-                    status_text = f"/help for {total_servers} servers"
+                    status_text = f"Current maintenance"
                     
                 activity = discord.Activity(type=discord.ActivityType.watching, name=status_text)
                 await self.change_presence(activity=activity)
