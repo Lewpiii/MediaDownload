@@ -881,24 +881,23 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 "╔═══════════════════════════════════════════════╗\n"
                 "              Media Download Ready               \n"
                 "╚═══════════════════════════════════════════════╝\n\n"
-                f"📊 Statistics:\n"
-                f"• Files Found: {len(media_files)}\n"
+                f"📊 **Files Found**\n"
+                f"• Total Files: {len(media_files)}\n"
                 f"• Messages Analyzed: {processed_messages}\n"
                 f"• Total Size: {self._format_size(total_size)}\n\n"
-                "📥 Download Instructions:\n"
-                "1. Download MediaDownloader.bat\n"
+                "📥 **Download Instructions**\n"
+                "1. Download `MediaDownloader.bat`\n"
                 "2. Double-click to run\n"
                 "3. Choose download location\n"
                 "4. Wait for completion\n\n"
-                "🛡️ Security Information:\n"
+                "🛡️ **Security Information**\n"
                 "• Verified Safe Script\n"
                 "• Auto-organizing Downloads\n"
                 "• Smart Folder Structure\n"
             )
 
-            # Création et envoi des scripts
+            # Création et envoi du script
             batch_content = self._create_batch_script(media_files)
-            shell_content = self._create_shell_script(media_files)
 
             await thread.send(
                 content=summary,
@@ -907,11 +906,6 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                         io.StringIO(batch_content),
                         filename="MediaDownloader.bat",
                         description="Windows Download Script"
-                    ),
-                    discord.File(
-                        io.StringIO(shell_content),
-                        filename="download.sh",
-                        description="Linux/Mac Download Script"
                     )
                 ]
             )
