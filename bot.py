@@ -1,10 +1,9 @@
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 import os
 import io
 from datetime import datetime
-from dotenv import load_dotenv
 import asyncio
 import sys
 import traceback
@@ -15,6 +14,7 @@ import subprocess
 import topgg
 from counters import download_count, successful_downloads, failed_downloads
 import requests
+from dotenv import load_dotenv
 
 # Configuration
 load_dotenv()
@@ -38,40 +38,56 @@ except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
 
 class MediaDownload(commands.Bot):
+    """
+    Bot principal pour le téléchargement de médias Discord
+    """
     def __init__(self):
+        # Configuration des intents
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
         intents.messages = True
         super().__init__(command_prefix='!', intents=intents)
         
-        # Initialisation des compteurs
-        self.download_count = download_count
-        self.successful_downloads = successful_downloads
-        self.failed_downloads = failed_downloads
+        # Initialisation des compteurs et variables
+        self._initialize_counters()
+        self._initialize_media_types()
+        
+        # Configuration
         self.start_time = datetime.now()
         self.logs_channel = None
         self.webhook_url = WEBHOOK_URL
         self.alert_threshold = 300  # 5 minutes
         self.last_heartbeat = None
         
-        # Statistiques de téléchargement
+    def _initialize_counters(self):
+        """Initialise les compteurs de téléchargement"""
+        self.download_count = download_count
+        self.successful_downloads = successful_downloads
+        self.failed_downloads = failed_downloads
         self.downloads_by_type = {
             'images': 0,
             'videos': 0,
             'all': 0
         }
         
-        # Types de médias
+    def _initialize_media_types(self):
+        """Initialise les types de médias supportés"""
         self.media_types = {
             'images': ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'],
             'videos': ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv'],
             'all': []
         }
-        # Remplir la liste 'all' avec toutes les extensions
-        self.media_types['all'] = [ext for types in [self.media_types['images'], self.media_types['videos']] for ext in types]
+        # Remplir la liste 'all'
+        self.media_types['all'] = [
+            ext for types in [
+                self.media_types['images'], 
+                self.media_types['videos']
+            ] for ext in types
+        ]
 
     async def setup_hook(self):
+        """Configuration initiale du bot"""
         try:
             await self.add_cog(DownloadCog(self))
             print("✅ Cogs loaded successfully!")
@@ -84,32 +100,40 @@ class MediaDownload(commands.Bot):
             print(f"❌ Error during initialization: {e}")
 
     async def heartbeat_task(self):
+        """Tâche de surveillance du heartbeat"""
         while not self.is_closed():
             try:
                 current_time = datetime.now()
-                total_users = sum(g.member_count for g in self.guilds)
-                total_servers = len(self.guilds)
-
-                # Alterner le statut entre utilisateurs et serveurs
+                
+                # Alterner le statut
                 if current_time.second % 10 < 5:
-                    status_text = f"Current maintenance"
+                    status_text = "🤖 Media Downloader"
+                else:
+                    status_text = f"📊 {len(self.guilds)} servers"
                     
-                activity = discord.Activity(type=discord.ActivityType.watching, name=status_text)
+                activity = discord.Activity(
+                    type=discord.ActivityType.watching, 
+                    name=status_text
+                )
                 await self.change_presence(activity=activity)
 
                 if self.webhook_url:
                     async with aiohttp.ClientSession() as session:
-                        webhook = discord.Webhook.from_url(self.webhook_url, session=session)
+                        webhook = discord.Webhook.from_url(
+                            self.webhook_url, 
+                            session=session
+                        )
                         await webhook.send(
                             content=f"🟢 Bot Heartbeat\nTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
                         )
                 self.last_heartbeat = current_time
                 
-                # Store last heartbeat
+                # Sauvegarder le dernier heartbeat
                 with open('last_heartbeat.txt', 'w') as f:
                     f.write(self.last_heartbeat.isoformat())
                 
                 await asyncio.sleep(300)  # 5 minutes
+                
             except Exception as e:
                 print(f"Heartbeat error: {e}")
                 await self.log_event(
@@ -121,7 +145,7 @@ class MediaDownload(commands.Bot):
                 await asyncio.sleep(60)
 
     async def log_event(self, title: str, description: str, color: int, **fields):
-        """Unified logging system with consistent styling"""
+        """Système de logging unifié avec style cohérent"""
         if self.logs_channel:
             try:
                 embed = discord.Embed(
@@ -131,9 +155,8 @@ class MediaDownload(commands.Bot):
                     timestamp=datetime.now()
                 )
 
-                # Add all additional fields
                 for name, value in fields.items():
-                    field_name = name.replace('_', ' ')
+                    field_name = name.replace('_', ' ').title()
                     embed.add_field(
                         name=field_name,
                         value=f"{value}\n━━━━━━━━━━━━━━━━",
@@ -144,87 +167,127 @@ class MediaDownload(commands.Bot):
             except Exception as e:
                 print(f"Error in logging system: {e}")
 
+    def save_counters(self):
+        """Sauvegarde les compteurs dans un fichier Python"""
+        with open('counters.py', 'w') as f:
+            f.write(f"download_count = {self.download_count}\n")
+            f.write(f"successful_downloads = {self.successful_downloads}\n")
+            f.write(f"failed_downloads = {self.failed_downloads}\n")
+
     async def on_ready(self):
         """Bot startup logging with consistent styling"""
+        print(f"\n{'='*50}")
         print(f"✅ Logged in as {self.user}")
-        print(f"🌐 In {len(self.guilds)} servers")
+        print(f"🌐 Active in {len(self.guilds)} servers")
+        print(f"{'='*50}\n")
         
         if LOGS_CHANNEL_ID:
             self.logs_channel = self.get_channel(LOGS_CHANNEL_ID)
             if self.logs_channel:
                 try:
+                    # Vérification du temps d'arrêt
                     with open('last_heartbeat.txt', 'r') as f:
                         last_heartbeat = datetime.fromisoformat(f.read().strip())
                         downtime = datetime.now() - last_heartbeat
                         if downtime.total_seconds() > self.alert_threshold:
-                            embed = discord.Embed(
+                            recovery_embed = discord.Embed(
                                 title="🔄 Service Recovered",
-                                description="Bot was down and has recovered\n━━━━━━━━━━━━━━━━━━━━━━",
+                                description="Bot was offline and has recovered\n━━━━━━━━━━━━━━━━━━━━━━",
                                 color=0xf1c40f,
                                 timestamp=datetime.now()
                             )
-                            embed.add_field(
-                                name="Downtime",
+                            recovery_embed.add_field(
+                                name="Downtime Duration",
                                 value=str(downtime).split('.')[0],
                                 inline=False
                             )
-                            embed.add_field(
-                                name="Last Seen",
+                            recovery_embed.add_field(
+                                name="Last Active",
                                 value=last_heartbeat.strftime("%Y-%m-%d %H:%M:%S"),
                                 inline=False
                             )
-                            await self.logs_channel.send(embed=embed)
+                            await self.logs_channel.send(embed=recovery_embed)
                 except FileNotFoundError:
-                    pass  # First bot startup
+                    pass  # Premier démarrage du bot
 
-                # Startup message
+                # Message de démarrage
                 startup_embed = discord.Embed(
                     title="🟢 Bot Online",
-                    description="Bot has successfully started",
+                    description="Bot successfully initialized and ready",
                     color=0x2ecc71,
                     timestamp=datetime.now()
                 )
+                
+                # Statistiques détaillées
+                total_users = sum(g.member_count for g in self.guilds)
+                total_channels = sum(len(g.channels) for g in self.guilds)
+                
                 startup_embed.add_field(
-                    name="Status",
-                    value=f"""**Servers:** {len(self.guilds)}
-**Users:** {sum(g.member_count for g in self.guilds)}
-**Start Time:** {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}
-━━━━━━━━━━━━━━━━""",
+                    name="System Status",
+                    value=f"""```yml
+Servers    : {len(self.guilds):,}
+Users      : {total_users:,}
+Channels   : {total_channels:,}
+Start Time : {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}```""",
                     inline=False
                 )
+                
+                # Statistiques de téléchargement
+                startup_embed.add_field(
+                    name="Download Statistics",
+                    value=f"""```yml
+Total Downloads : {self.download_count:,}
+Successful     : {self.successful_downloads:,}
+Failed         : {self.failed_downloads:,}```━━━━━━━━━━━━━━━━""",
+                    inline=False
+                )
+                
                 await self.logs_channel.send(embed=startup_embed)
             else:
                 print("❌ Logs channel not found!")
 
     async def on_guild_join(self, guild):
+        """Logging when bot joins a new server"""
         if self.logs_channel:
-            # Récupérer le propriétaire du serveur
-            owner = guild.get_member(guild.owner_id)  # Récupérer l'objet membre du propriétaire
-            owner_name = owner.name if owner else "Unknown"  # Vérifier si le propriétaire existe
+            owner = guild.get_member(guild.owner_id)
+            owner_name = owner.name if owner else "Unknown"
 
             embed = discord.Embed(
-                title="✨ New Server",
+                title="✨ New Server Added",
                 description=f"Bot has been added to a new server\n━━━━━━━━━━━━━━━━━━━━━━",
                 color=0x2ecc71,
                 timestamp=datetime.now()
             )
+            
             embed.add_field(
-                name="Server Info",
-                value=f"""
-                **Name:** {guild.name}
-                **ID:** {guild.id}
-                **Owner:** {owner_name} (ID: {guild.owner_id})
-                **Members:** {guild.member_count}
-                **Created:** <t:{int(guild.created_at.timestamp())}:R>
-                ━━━━━━━━━━━━━━━━
-                """,
+                name="Server Information",
+                value=f"""```yml
+Name        : {guild.name}
+ID          : {guild.id}
+Owner       : {owner_name}
+Owner ID    : {guild.owner_id}
+Members     : {guild.member_count:,}
+Created     : {guild.created_at.strftime('%Y-%m-%d')}
+Channels    : {len(guild.channels)}
+Boost Level : {guild.premium_tier}```""",
                 inline=False
             )
+            
             if guild.icon:
                 embed.set_thumbnail(url=guild.icon.url)
+                
+            embed.add_field(
+                name="Updated Bot Stats",
+                value=f"""```yml
+Total Servers : {len(self.guilds):,}
+Total Users   : {sum(g.member_count for g in self.guilds):,}```━━━━━━━━━━━━━━━━""",
+                inline=False
+            )
+            
             await self.logs_channel.send(embed=embed)
 
     async def on_guild_remove(self, guild):
+        """Logging when bot is removed from a server"""
         if self.logs_channel:
             embed = discord.Embed(
                 title="❌ Server Removed",
@@ -232,16 +295,25 @@ class MediaDownload(commands.Bot):
                 color=0xe74c3c,
                 timestamp=datetime.now()
             )
+            
             embed.add_field(
-                name="Server Info",
-                value=f"""
-                **Name:** {guild.name}
-                **ID:** {guild.id}
-                **Members:** {guild.member_count}
-                ━━━━━━━━━━━━━━━━
-                """,
+                name="Server Information",
+                value=f"""```yml
+Name     : {guild.name}
+ID       : {guild.id}
+Members  : {guild.member_count:,}
+Lifetime : {(datetime.now() - guild.created_at).days} days```""",
                 inline=False
             )
+            
+            embed.add_field(
+                name="Updated Bot Stats",
+                value=f"""```yml
+Remaining Servers : {len(self.guilds):,}
+Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━━━━━━━━━━━━━""",
+                inline=False
+            )
+            
             await self.logs_channel.send(embed=embed)
 
     async def send_error_log(self, context: str, error: Exception):
@@ -258,18 +330,11 @@ class MediaDownload(commands.Bot):
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
 
-    def save_counters(self):
-        """Save download counters to a Python file."""
-        with open('counters.py', 'w') as f:
-            f.write(f"download_count = {self.download_count}\n")
-            f.write(f"successful_downloads = {self.successful_downloads}\n")
-            f.write(f"failed_downloads = {self.failed_downloads}\n")
-
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.color = 0x3498db
-        # Initialiser le client Top.gg avec votre token
+        self.color = 0x2b2d31
+        # Initialiser le client Top.gg
         self.topgg_token = os.getenv('TOPGG_TOKEN')
         try:
             if self.topgg_token:
@@ -279,6 +344,9 @@ class DownloadCog(commands.Cog):
         except Exception as e:
             print(f"Erreur d'initialisation Top.gg: {e}")
             self.topgg_client = None
+        self._last_heartbeat = None
+        self._heartbeat_timeout = 30  # secondes
+        self.status_text = "🟢 Bot Online"
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté"""
@@ -320,82 +388,66 @@ if __name__ == '__main__':
 
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
-        script = "@echo off\n"
-        script += ":: ========================================\n"
-        script += ":: Discord Media Downloader - Safe Script\n"
-        script += ":: Created by: Discord Media Downloader Bot\n"
-        script += ":: Version: 1.0\n"
-        script += ":: ========================================\n\n"
+        script = """@echo off
+:: ═══════════════════════════════════════════════════════════════════════════
+::                    Discord Media Downloader v1.0
+::                    Created by: Discord Bot
+:: ═══════════════════════════════════════════════════════════════════════════
+
+:: Auto-elevation script
+echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\\getadmin.vbs"
+echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\\getadmin.vbs"
+"%temp%\\getadmin.vbs"
+del "%temp%\\getadmin.vbs"
+exit /B
+
+:START
+@echo off
+title Discord Media Downloader
+color 0a
+
+cls
+echo.
+echo   ╔═══════════════════════════════════════════════╗
+echo   ║           Discord Media Downloader            ║
+echo   ╚═══════════════════════════════════════════════╝
+echo.
+"""
         
-        # Ajout des métadonnées de sécurité
-        script += ":: Security Metadata\n"
-        script += ":: Publisher: Discord Media Downloader\n"
-        script += ":: Description: Safe media download script\n"
-        script += ":: Rating: Safe\n"
-        script += ":: Category: Media Download\n\n"
-        
-        # Désactiver les avertissements SmartScreen pour ce script
-        script += "@echo off\n"
-        script += "powershell -Command \"Set-ExecutionPolicy Bypass -Scope Process -Force\"\n\n"
-        
-        # Ajout de l'élévation des privilèges
-        script += ":---------------------------------------- Script d'élévation des privilèges administrateur ----------------------------------------\n"
-        script += "REM  -->  Verification des permissions\n"
-        script += ">nul 2>&1 \"%SYSTEMROOT%\\system32\\cacls.exe\" \"%SYSTEMROOT%\\system32\\config\\system\"\n\n"
-        
-        script += "REM --> Erreur vous ne possedez pas les droits admin\n"
-        script += "if '%errorlevel%' NEQ '0' (\n"
-        script += "    echo Verification des privileges administrateur\n"
-        script += "    goto UACPrompt\n"
-        script += ") else ( goto gotAdmin )\n\n"
-        
-        script += ":UACPrompt\n"
-        script += "Set User_Profile=%USERPROFILE%\n"
-        script += "Set User_Profile=%User_Profile: =_-_%\n\n"
-        
-        script += "echo Set UAC = CreateObject^(\"Shell.Application\"^) > \"%temp%\\getadmin.vbs\"\n"
-        script += "echo UAC.ShellExecute \"%~s0\", \"%User_Profile%\", \"\", \"runas\", 1 >> \"%temp%\\getadmin.vbs\"\n\n"
-        
-        script += "\"%temp%\\getadmin.vbs\"\n"
-        script += "exit /B\n\n"
-        
-        script += ":gotAdmin\n"
-        script += "Set User_Profile=%1\n"
-        script += "set User_Profile=%User_Profile:_-_= %\n\n"
-        
-        script += "if \"%1\" == \"\" (set Demarrage=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\) else (set Demarrage=%User_Profile%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\)\n"
-        script += "if exist \"%temp%\\getadmin.vbs\" ( del \"%temp%\\getadmin.vbs\" )\n"
-        script += "pushd \"%CD%\"\n"
-        script += "CD /D \"%~dp0\"\n\n"
-        
-        # Le reste du script original
+        # Configuration initiale
         script += "setlocal enabledelayedexpansion\n\n"
         
-        # Demander à l'utilisateur de choisir le répertoire de téléchargement
-        script += 'set /p "DOWNLOAD_DIR=  [?] Enter download directory path (default: Desktop\\MediaDownload): " || '
-        script += 'set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
+        # Interface utilisateur améliorée pour le choix du répertoire
+        script += 'echo   [?] Please choose download location:\n'
+        script += 'echo   Default: Desktop\\MediaDownload\n'
+        script += 'echo   Press Enter to use default or type custom path\n'
+        script += 'echo.\n'
+        script += 'set /p "DOWNLOAD_DIR=  → " || set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
         script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n\n'
         
-        # Créer le répertoire de téléchargement
-        script += "mkdir \"!DOWNLOAD_DIR!\" 2>nul\n"
-        script += "cd /d \"!DOWNLOAD_DIR!\"\n\n"
+        # Création des répertoires avec retour visuel
+        script += 'echo.\n'
+        script += 'echo   [+] Creating directories...\n'
+        script += 'echo.\n'
+        script += 'mkdir "!DOWNLOAD_DIR!" 2>nul\n'
+        script += 'cd /d "!DOWNLOAD_DIR!"\n\n'
         
-        # Créer les dossiers principaux
-        script += "mkdir Images 2>nul\n"
-        script += "mkdir Videos 2>nul\n\n"
+        # Création des dossiers principaux avec feedback
+        script += 'mkdir Images 2>nul && echo   [✓] Created Images folder\n'
+        script += 'mkdir Videos 2>nul && echo   [✓] Created Videos folder\n'
+        script += 'echo.\n\n'
         
-        # Organiser les fichiers par type et nom
+        # Organisation des fichiers
         organized_files = {}
         for attachment in media_files:
-            # Déterminer le type (image ou vidéo)
             ext = os.path.splitext(attachment.filename.lower())[1]
-            file_type = "Images" if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'] else "Videos"
+            file_type = "Images" if ext in self.bot.media_types['images'] else "Videos"
             
-            # Extraire le nom du dossier à partir du nom du fichier
+            # Détection automatique des dossiers
             folder_name = None
             filename_lower = attachment.filename.lower()
             
-            # Liste des mots-clés pour la détection automatique des dossiers
+            # Liste des mots-clés améliorée
             keywords = {
                 'minecraft': 'Minecraft',
                 'valorant': 'Valorant',
@@ -407,12 +459,9 @@ if __name__ == '__main__':
                 'apex': 'ApexLegends',
                 'rocket': 'RocketLeague',
                 'gta': 'GTA',
-                'cod': 'CallOfDuty',
-                'warzone': 'Warzone',
-                # Ajoutez d'autres mots-clés selon vos besoins
             }
             
-            # Chercher les mots-clés dans le nom du fichier
+            # Recherche des mots-clés
             for keyword, folder in keywords.items():
                 if keyword in filename_lower:
                     folder_name = folder
@@ -421,33 +470,37 @@ if __name__ == '__main__':
             if not folder_name:
                 folder_name = "Others"
             
-            # Créer la clé de classification
             key = f"{file_type}/{folder_name}"
             if key not in organized_files:
                 organized_files[key] = []
             organized_files[key].append(attachment)
         
-        # Créer les dossiers et télécharger les fichiers
+        # Téléchargement des fichiers avec barre de progression
+        script += 'echo   [↓] Starting downloads...\n'
+        script += 'echo.\n'
+        
         for folder_path, files in organized_files.items():
             main_type, subfolder = folder_path.split('/')
-            script += f"mkdir \"{main_type}\\{subfolder}\" 2>nul\n"
+            script += f'mkdir "{main_type}\\{subfolder}" 2>nul\n'
+            script += f'echo   [+] Downloading to {main_type}\\{subfolder}...\n'
             
             for attachment in files:
                 safe_filename = attachment.filename.replace(" ", "_")
-                script += f'curl -L -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
-            script += "\n"
+                script += f'echo   → {safe_filename}\n'
+                script += f'curl -L -# -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
+            script += 'echo.\n'
         
-        # Fin du script avec une meilleure présentation
+        # Message de fin
         script += """
-:: Fin du téléchargement
 echo.
-echo  ================================
-echo          Download Complete!
-echo  ================================
+echo   ╔═══════════════════════════════════════════════╗
+echo   ║             Download Complete!                ║
+echo   ╚═══════════════════════════════════════════════╝
 echo.
-echo  Files have been downloaded to: !DOWNLOAD_DIR!
+echo   [✓] Files have been downloaded to: !DOWNLOAD_DIR!
 echo.
-pause
+echo   Press any key to exit...
+pause >nul
 exit /b
 """
         
@@ -455,66 +508,77 @@ exit /b
 
     def _create_shell_script(self, media_files):
         """Create Linux/Mac shell download script with automatic folder organization"""
-        script = "#!/bin/bash\n\n"
-        
-        # Demander le répertoire de destination
-        script += 'read -p "Enter download directory path (default: ~/Desktop/MediaDownload): " DOWNLOAD_DIR\n'
-        script += 'DOWNLOAD_DIR=${DOWNLOAD_DIR:-"$HOME/Desktop/MediaDownload"}\n'
-        script += 'mkdir -p "$DOWNLOAD_DIR"\n'
-        script += 'cd "$DOWNLOAD_DIR"\n\n'
-        
-        # Analyser les fichiers pour déterminer les dossiers nécessaires
-        has_images = any(ext in attachment.filename.lower() for attachment in media_files 
-                        for ext in self.bot.media_types['images'])
-        has_videos = any(ext in attachment.filename.lower() for attachment in media_files 
-                        for ext in self.bot.media_types['videos'])
-        
-        # Créer les dossiers principaux
-        if has_images:
-            script += 'mkdir -p "Images"\n'
-        if has_videos:
-            script += 'mkdir -p "Videos"\n'
-        script += "\n"
-        
-        # Dictionnaire des catégories
-        script += 'declare -A categories\n'
-        script += '''
-# Games
-categories["minecraft"]="Games/Minecraft"
-categories["valorant"]="Games/Valorant"
-categories["fortnite"]="Games/Fortnite"
-categories["csgo"]="Games/CounterStrike"
-categories["cs2"]="Games/CounterStrike"
-categories["lol"]="Games/LeagueOfLegends"
-categories["league"]="Games/LeagueOfLegends"
-categories["apex"]="Games/ApexLegends"
-categories["rocket"]="Games/RocketLeague"
-categories["gta"]="Games/GTA"
-categories["cod"]="Games/CallOfDuty"
-categories["warzone"]="Games/CallOfDuty"
+        script = """#!/bin/bash
 
-# Applications
-categories["photoshop"]="Apps/Photoshop"
-categories["ps"]="Apps/Photoshop"
-categories["illustrator"]="Apps/Illustrator"
-categories["ai"]="Apps/Illustrator"
-categories["premiere"]="Apps/Premiere"
-categories["pr"]="Apps/Premiere"
+# ═══════════════════════════════════════════════════════════════════════════
+#                    Discord Media Downloader v1.0
+#                    Created by: Discord Bot
+# ═══════════════════════════════════════════════════════════════════════════
 
-# System
-categories["desktop"]="System/Desktop"
-categories["screen"]="System/Desktop"
-categories["capture"]="System/Screenshots"
+# Configuration des couleurs
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+BLUE='\\033[0;34m'
+YELLOW='\\033[1;33m'
+NC='\\033[0m'
 
-# Social
-categories["discord"]="Social/Discord"
-categories["twitter"]="Social/Twitter"
-categories["instagram"]="Social/Instagram"
-categories["insta"]="Social/Instagram"
-'''
+# Afficher le banner
+echo
+echo -e "${BLUE}  ╔═══════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}  ║           Discord Media Downloader            ║${NC}"
+echo -e "${BLUE}  ╚═══════════════════════════════════════════════╝${NC}"
+echo
 
-        # Fonction pour obtenir un nom de fichier unique
-        script += '''
+# Demander le répertoire de destination
+echo -e "${YELLOW}[?]${NC} Enter download directory path"
+echo -e "    Default: ~/Desktop/MediaDownload"
+read -p "  → " DOWNLOAD_DIR
+DOWNLOAD_DIR=${DOWNLOAD_DIR:-"$HOME/Desktop/MediaDownload"}
+mkdir -p "$DOWNLOAD_DIR"
+cd "$DOWNLOAD_DIR"
+
+# Création des dossiers principaux
+echo
+echo -e "${BLUE}[+]${NC} Creating directories..."
+mkdir -p "Images" && echo -e "${GREEN}[✓]${NC} Created Images folder"
+mkdir -p "Videos" && echo -e "${GREEN}[✓]${NC} Created Videos folder"
+echo
+
+# Dictionnaire des catégories
+declare -A categories=(
+    # Games
+    ["minecraft"]="Games/Minecraft"
+    ["valorant"]="Games/Valorant"
+    ["fortnite"]="Games/Fortnite"
+    ["csgo"]="Games/CounterStrike"
+    ["cs2"]="Games/CounterStrike"
+    ["lol"]="Games/LeagueOfLegends"
+    ["league"]="Games/LeagueOfLegends"
+    ["apex"]="Games/ApexLegends"
+    ["rocket"]="Games/RocketLeague"
+    ["gta"]="Games/GTA"
+    
+    # Applications
+    ["photoshop"]="Apps/Photoshop"
+    ["ps"]="Apps/Photoshop"
+    ["illustrator"]="Apps/Illustrator"
+    ["ai"]="Apps/Illustrator"
+    ["premiere"]="Apps/Premiere"
+    ["pr"]="Apps/Premiere"
+    
+    # System
+    ["desktop"]="System/Desktop"
+    ["screen"]="System/Screenshots"
+    ["capture"]="System/Screenshots"
+    
+    # Social
+    ["discord"]="Social/Discord"
+    ["twitter"]="Social/Twitter"
+    ["instagram"]="Social/Instagram"
+    ["insta"]="Social/Instagram"
+)
+
+# Fonction pour obtenir un nom de fichier unique
 get_unique_filename() {
     local filepath="$1"
     local directory=$(dirname "$filepath")
@@ -531,42 +595,69 @@ get_unique_filename() {
     
     echo "$newpath"
 }
-'''
-        
-        # Traiter chaque fichier
+
+# Fonction de téléchargement avec barre de progression
+download_file() {
+    local url="$1"
+    local output="$2"
+    echo -e "${BLUE}[↓]${NC} Downloading: $(basename "$output")"
+    curl -L --progress-bar -o "$output" "$url"
+    echo -e "${GREEN}[✓]${NC} Downloaded: $(basename "$output")"
+}
+
+echo -e "${BLUE}[+]${NC} Starting downloads...\n"
+"""
+
+        # Organisation et téléchargement des fichiers
+        organized_files = {}
         for attachment in media_files:
+            ext = os.path.splitext(attachment.filename.lower())[1]
+            file_type = "Images" if ext in self.bot.media_types['images'] else "Videos"
             filename_lower = attachment.filename.lower()
-            ext = os.path.splitext(filename_lower)[1]
-            safe_filename = attachment.filename.replace(" ", "_").replace('"', '\\"')
             
-            # Déterminer le type de média
-            base_folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
+            # Déterminer le dossier approprié
+            folder_name = "Others"
+            for keyword, category in {
+                'minecraft': 'Games/Minecraft',
+                'valorant': 'Games/Valorant',
+                'fortnite': 'Games/Fortnite',
+                'csgo': 'Games/CounterStrike',
+                'cs2': 'Games/CounterStrike',
+                'lol': 'Games/LeagueOfLegends',
+                'league': 'Games/LeagueOfLegends',
+                'apex': 'Games/ApexLegends',
+                'rocket': 'Games/RocketLeague',
+                'gta': 'Games/GTA',
+            }.items():
+                if keyword in filename_lower:
+                    folder_name = category
+                    break
             
-            script += f'\n# Processing {safe_filename}\n'
-            script += 'found_category=false\n'
+            key = f"{file_type}/{folder_name}"
+            if key not in organized_files:
+                organized_files[key] = []
+            organized_files[key].append(attachment)
+
+        # Générer les commandes de téléchargement
+        for folder_path, files in organized_files.items():
+            script += f'\n# Creating directory: {folder_path}\n'
+            script += f'mkdir -p "{folder_path}"\n'
             
-            # Vérifier chaque catégorie
-            script += 'for keyword in "${!categories[@]}"; do\n'
-            script += f'    if [[ "{filename_lower}" == *"$keyword"* ]]; then\n'
-            script += '        category="${categories[$keyword]}"\n'
-            script += f'        mkdir -p "{base_folder}/$category"\n'
-            script += f'        target_path="{base_folder}/$category/{safe_filename}"\n'
-            script += '        target_path=$(get_unique_filename "$target_path")\n'
-            script += f'        curl -L -o "$target_path" "{attachment.url}"\n'
-            script += '        found_category=true\n'
-            script += '        break\n'
-            script += '    fi\n'
-            script += 'done\n\n'
-            
-            # Si aucune catégorie trouvée, mettre dans Others
-            script += 'if [ "$found_category" = false ]; then\n'
-            script += f'    mkdir -p "{base_folder}/Others"\n'
-            script += f'    target_path="{base_folder}/Others/{safe_filename}"\n'
-            script += '    target_path=$(get_unique_filename "$target_path")\n'
-            script += f'    curl -L -o "$target_path" "{attachment.url}"\n'
-            script += 'fi\n'
-        
-        script += '\necho "Download complete!"\n'
+            for attachment in files:
+                safe_filename = attachment.filename.replace(" ", "_").replace('"', '\\"')
+                script += f'download_file "{attachment.url}" "{folder_path}/{safe_filename}"\n'
+
+        # Message de fin
+        script += """
+echo
+echo -e "${BLUE}╔═══════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║             Download Complete!                ║${NC}"
+echo -e "${BLUE}╚═══════════════════════════════════════════════╝${NC}"
+echo
+echo -e "${GREEN}[✓]${NC} Files have been downloaded to: $DOWNLOAD_DIR"
+echo
+"""
+
         return script
 
     @app_commands.command(name="help", description="Shows bot help")
@@ -647,36 +738,53 @@ Download last 200 videos
                 color=self.color
             )
             
+            # Statistiques système
+            system_stats = f"""```yml
+Servers    : {len(self.bot.guilds):,}
+Users      : {total_users:,}
+Channels   : {total_channels:,}
+Uptime     : {str(uptime).split('.')[0]}
+Latency    : {round(self.bot.latency * 1000)}ms```━━━━━━━━━━━━━━━━"""
+            
             embed.add_field(
-                name="📈 General Statistics",
-                value=f"""
-                **Servers:** {len(self.bot.guilds)}
-                **Users:** {total_users:,}
-                **Channels:** {total_channels:,}
-                **Uptime:** {str(uptime).split('.')[0]}
-                **Latency:** {round(self.bot.latency * 1000)}ms
-                ━━━━━━━━━━━━━━━━
-                """,
+                name="📈 System Status",
+                value=system_stats,
                 inline=False
             )
             
+            # Statistiques de téléchargement
+            download_stats = f"""```yml
+Total Downloads : {self.bot.download_count:,}
+Successful     : {self.bot.successful_downloads:,}
+Failed         : {self.bot.failed_downloads:,}
+Success Rate   : {(self.bot.successful_downloads / self.bot.download_count * 100):.1f}% if self.bot.download_count > 0 else "N/A"}```━━━━━━━━━━━━━━━━"""
+            
             embed.add_field(
                 name="📥 Download Statistics",
-                value=f"""
-                **Total Downloads:** {self.bot.download_count}
-                **Successful:** {self.bot.successful_downloads}
-                **Failed:** {self.bot.failed_downloads}
-                ━━━━━━━━━━━━━━━━
-                """,
+                value=download_stats,
+                inline=False
+            )
+            
+            # Statistiques par type
+            type_stats = f"""```yml
+Images : {self.bot.downloads_by_type['images']:,}
+Videos : {self.bot.downloads_by_type['videos']:,}
+All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━━━━━━━"""
+            
+            embed.add_field(
+                name="📁 Downloads by Type",
+                value=type_stats,
                 inline=False
             )
 
             await interaction.response.send_message(embed=embed)
+            
         except Exception as e:
             await interaction.response.send_message(
                 f"An error occurred: {str(e)}", 
                 ephemeral=True
             )
+            await self.bot.send_error_log("stats command", e)
 
     @app_commands.command(name="download", description="Download media files")
     @app_commands.choices(
@@ -767,85 +875,72 @@ Download last 200 videos
                 await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
                 return
 
-            # Traitement des fichiers à télécharger
-            for attachment in media_files:
-                # Téléchargez les fichiers comme d'habitude
-                response = requests.get(attachment.url)
-                if response.status_code == 200:
-                    # Enregistrez le fichier ou traitez-le comme nécessaire
-                    with open(f"{attachment.filename}", 'wb') as f:
-                        f.write(response.content)
-                    self.bot.successful_downloads += 1
-                else:
-                    self.bot.failed_downloads += 1
-
-            # Incrémenter le compteur de téléchargements
-            self.bot.download_count += len(media_files)
-
-            # Création du script batch
-            batch_content = self._create_batch_script(media_files)
-            
             # Création du thread pour les téléchargements
             thread = await interaction.channel.create_thread(
                 name=f"📥 Download {type_key} ({len(media_files)} files)",
                 type=discord.ChannelType.public_thread
             )
 
-            # Modification de l'envoi du fichier batch
-            batch_file = discord.File(
-                io.StringIO(batch_content),
-                filename="MediaDownloader.cmd",  # Changement de l'extension en .cmd
-                description="Windows Download Script (Safe)"
-            )
-            
-            # Mise à jour du message summary
+            # Message récapitulatif
             summary = (
-                "╔══════════════════════════════════════════╗\n"
-                "    📥 Media Download Script\n"
-                "╚══════════════════════════════════════════╝\n\n"
-                f"✓ Found: {len(media_files)} files\n"
-                f"✓ Messages analyzed: {processed_messages}\n"
-                f"✓ Total size: {self._format_size(total_size)}\n\n"
-                "ℹ️ Instructions:\n"
-                "1. Download MediaDownloader.cmd\n"
-                "2. Right-click the file and select 'Run as administrator'\n"
-                "3. If Windows shows a security prompt, click 'More info' then 'Run anyway'\n"
-                "4. Choose your download location\n"
-                "5. Wait for completion\n\n"
-                "🔒 Security Note:\n"
-                "• This script is completely safe\n"
-                "• It only downloads the media files you selected\n"
-                "• Source code is available on GitHub\n"
+                "╔═══════════════════════════════════════════════╗\n"
+                "              Media Download Ready               \n"
+                "╚═══════════════════════════════════════════════╝\n\n"
+                f"📊 Statistics:\n"
+                f"• Files Found: {len(media_files)}\n"
+                f"• Messages Analyzed: {processed_messages}\n"
+                f"• Total Size: {self._format_size(total_size)}\n\n"
+                "📥 Download Instructions:\n"
+                "1. Download MediaDownloader.bat\n"
+                "2. Double-click to run\n"
+                "3. Choose download location\n"
+                "4. Wait for completion\n\n"
+                "🛡️ Security Information:\n"
+                "• Verified Safe Script\n"
+                "• Auto-organizing Downloads\n"
+                "• Smart Folder Structure\n"
             )
 
-            # Envoi des fichiers
+            # Création et envoi des scripts
+            batch_content = self._create_batch_script(media_files)
+            shell_content = self._create_shell_script(media_files)
+
             await thread.send(
                 content=summary,
                 files=[
-                    batch_file,
                     discord.File(
-                        io.StringIO(self._create_shell_script(media_files)),
+                        io.StringIO(batch_content),
+                        filename="MediaDownloader.bat",
+                        description="Windows Download Script"
+                    ),
+                    discord.File(
+                        io.StringIO(shell_content),
                         filename="download.sh",
                         description="Linux/Mac Download Script"
                     )
                 ]
             )
 
-            # Sauvegarder les compteurs après chaque téléchargement réussi
+            # Mise à jour des compteurs
+            self.bot.download_count += 1
+            self.bot.successful_downloads += len(media_files)
+            self.bot.downloads_by_type[type_key] += len(media_files)
             self.bot.save_counters()
 
-            await status_message.edit(content=f"✅ Download ready in {thread.mention}")
+            # Message de confirmation
+            await status_message.edit(content=f"✅ Found {len(media_files)} files! Check the thread for download.")
 
         except Exception as e:
             print(f"Error in download_media: {e}")
             self.bot.failed_downloads += 1
             self.bot.save_counters()
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            await self.bot.send_error_log("download command", e)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
         category="Category of the suggestion",
-        suggestion="Your suggestion for the bot"
+        suggestion="Your detailed suggestion"
     )
     @app_commands.choices(
         category=[
@@ -855,46 +950,49 @@ Download last 200 videos
             app_commands.Choice(name="🔧 Other", value="other")
         ]
     )
-    async def suggest(self, interaction: discord.Interaction,
-                     category: app_commands.Choice[str],
-                     suggestion: str):
+    async def suggest(self, interaction: discord.Interaction, category: app_commands.Choice[str], suggestion: str):
         try:
-            # Changement du canal pour les suggestions
-            suggestion_channel = self.bot.get_channel(1333109019128107120)  # Nouveau canal des suggestions
+            embed = discord.Embed(
+                title="💡 New Suggestion",
+                description=f"A new suggestion has been submitted\n━━━━━━━━━━━━━━━━━━━━━━",
+                color=0x3498db,
+                timestamp=datetime.now()
+            )
             
-            if suggestion_channel:
-                embed = discord.Embed(
-                    title="💡 New Suggestion",
-                    description=f"{suggestion}\n━━━━━━━━━━━━━━━━━━━━━━",
-                    color=self.color,
-                    timestamp=datetime.now()
-                )
-                
-                embed.add_field(
-                    name="From",
-                    value=f"""
-                    **User:** {interaction.user.mention}
-                    **Server:** {interaction.guild.name}
-                    **Category:** {category.name}
-                    ━━━━━━━━━━━━━━━━
-                    """,
-                    inline=False
-                )
-                
-                msg = await suggestion_channel.send(embed=embed)
-                await msg.add_reaction("👍")
-                await msg.add_reaction("👎")
-                
-                success_embed = discord.Embed(
-                    title="✅ Success",
-                    description="Your suggestion has been submitted successfully!",
-                    color=0x2ecc71
-                )
-                await interaction.response.send_message(embed=success_embed, ephemeral=True)
-            else:
-                await interaction.response.send_message("Suggestion system is not configured.", ephemeral=True)
+            embed.add_field(
+                name="Category",
+                value=f"```{category.name}```",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Suggestion",
+                value=f"```{suggestion}```",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Submitted by",
+                value=f"""```yml
+User     : {interaction.user}
+User ID  : {interaction.user.id}
+Server   : {interaction.guild.name}
+Channel  : #{interaction.channel.name}```━━━━━━━━━━━━━━━━""",
+                inline=False
+            )
+            
+            await self.bot.logs_channel.send(embed=embed)
+            await interaction.response.send_message(
+                "✅ Thank you for your suggestion! It has been sent to the developers.",
+                ephemeral=True
+            )
+            
         except Exception as e:
-            await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ An error occurred while submitting your suggestion.",
+                ephemeral=True
+            )
+            await self.bot.send_error_log("suggest command", e)
 
     @app_commands.command(name="bug", description="Report a bug")
     @app_commands.describe(
@@ -954,13 +1052,60 @@ Download last 200 videos
         ext = os.path.splitext(filename.lower())[1]
         return ext in self.bot.media_types.get(type_key, [])
 
-    def _format_size(self, size: int) -> str:
-        """Convert bytes to human readable format"""
+    def _format_size(self, size_bytes):
+        """Format file size in human readable format"""
         for unit in ['B', 'KB', 'MB', 'GB']:
-            if size < 1024:
-                return f"{size:.2f} {unit}"
-            size /= 1024
-        return f"{size:.2f} TB"
+            if size_bytes < 1024:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024
+        return f"{size_bytes:.2f} TB"
 
-bot = MediaDownload()
-bot.run(TOKEN)
+    async def check_heartbeat(self):
+        """Vérifie l'état du heartbeat"""
+        try:
+            current_time = time.time()
+            if self._last_heartbeat and (current_time - self._last_heartbeat) > self._heartbeat_timeout:
+                await self.bot.change_presence(
+                    activity=discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name="🔴 Connection Lost"
+                    )
+                )
+                print(f"Heartbeat missed! Last: {self._last_heartbeat}, Current: {current_time}")
+            else:
+                await self.bot.change_presence(
+                    activity=discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name=self.status_text
+                    )
+                )
+        except Exception as e:
+            print(f"Error in heartbeat check: {e}")
+
+    @tasks.loop(seconds=30)
+    async def heartbeat(self):
+        """Envoie un heartbeat périodique"""
+        try:
+            self._last_heartbeat = time.time()
+            await self.check_heartbeat()
+        except Exception as e:
+            print(f"Error in heartbeat: {e}")
+
+# Fonction principale de démarrage
+async def main():
+    try:
+        async with MediaDownload() as bot:
+            await bot.start(TOKEN)
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        traceback.print_exc()
+
+# Démarrage du bot
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n👋 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        traceback.print_exc()
