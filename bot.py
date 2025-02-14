@@ -390,20 +390,15 @@ if __name__ == '__main__':
         """Create Windows batch download script with automatic folder organization"""
         script = """@echo off
 chcp 65001 > nul
-:: ═══════════════════════════════════════════════════════════════════════════
-::                    Discord Media Downloader v1.0
-::                    Created by: Discord Bot
-:: ═══════════════════════════════════════════════════════════════════════════
-
 title Discord Media Downloader
 color 0a
 mode con: cols=70 lines=30
 
 cls
 echo.
-echo   ╔═══════════════════════════════════════════════════════════╗
-echo   ║                Discord Media Downloader                    ║
-echo   ╚═══════════════════════════════════════════════════════════╝
+echo ====================================
+echo      Discord Media Downloader
+echo ====================================
 echo.
 """
         
@@ -411,91 +406,52 @@ echo.
         script += "setlocal enabledelayedexpansion\n\n"
         
         # Interface utilisateur améliorée pour le choix du répertoire
-        script += 'echo   [?] Choose download location:\n'
-        script += 'echo   ═══════════════════════════\n'
-        script += 'echo   Default: Desktop\MediaDownload\n'
-        script += 'echo   Press Enter or type custom path\n'
+        script += 'echo [?] Choose download location:\n'
+        script += 'echo ------------------------------------\n'
+        script += 'echo Default: Desktop\MediaDownload\n'
+        script += 'echo Press Enter or type custom path\n'
         script += 'echo.\n'
-        script += 'set /p "DOWNLOAD_DIR=   → " || set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n'
+        script += 'set /p "DOWNLOAD_DIR=-> " || set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n'
         script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n\n'
         
         # Création des répertoires avec retour visuel
         script += 'echo.\n'
-        script += 'echo   [+] Creating directories...\n'
+        script += 'echo [+] Creating directories...\n'
         script += 'echo.\n'
         script += 'mkdir "!DOWNLOAD_DIR!" 2>nul\n'
         script += 'cd /d "!DOWNLOAD_DIR!"\n\n'
         
         # Création des dossiers principaux avec feedback
-        script += 'mkdir Images 2>nul && echo   [✓] Created Images folder\n'
-        script += 'mkdir Videos 2>nul && echo   [✓] Created Videos folder\n'
+        script += 'mkdir Images 2>nul && echo [+] Created Images folder\n'
+        script += 'mkdir Videos 2>nul && echo [+] Created Videos folder\n'
         script += 'echo.\n\n'
         
-        # Organisation des fichiers
-        organized_files = {}
-        for attachment in media_files:
-            ext = os.path.splitext(attachment.filename.lower())[1]
-            file_type = "Images" if ext in self.bot.media_types['images'] else "Videos"
-            
-            # Détection automatique des dossiers
-            folder_name = None
-            filename_lower = attachment.filename.lower()
-            
-            # Liste des mots-clés améliorée
-            keywords = {
-                'minecraft': 'Minecraft',
-                'valorant': 'Valorant',
-                'fortnite': 'Fortnite',
-                'csgo': 'CSGO',
-                'cs2': 'CS2',
-                'lol': 'LeagueOfLegends',
-                'league': 'LeagueOfLegends',
-                'apex': 'ApexLegends',
-                'rocket': 'RocketLeague',
-                'gta': 'GTA',
-            }
-            
-            # Recherche des mots-clés
-            for keyword, folder in keywords.items():
-                if keyword in filename_lower:
-                    folder_name = folder
-                    break
-            
-            if not folder_name:
-                folder_name = "Others"
-            
-            key = f"{file_type}/{folder_name}"
-            if key not in organized_files:
-                organized_files[key] = []
-            organized_files[key].append(attachment)
-        
-        # Téléchargement des fichiers avec barre de progression
-        script += 'echo   [↓] Starting downloads...\n'
+        # Téléchargement des fichiers
+        script += 'echo [+] Starting downloads...\n'
         script += 'echo.\n'
         
-        for folder_path, files in organized_files.items():
+        for folder_path, files in media_files.items():
             main_type, subfolder = folder_path.split('/')
             script += f'mkdir "{main_type}\\{subfolder}" 2>nul\n'
-            script += f'echo   [+] Downloading to {main_type}\\{subfolder}...\n'
+            script += f'echo [+] Downloading to {main_type}\\{subfolder}...\n'
             
             for attachment in files:
                 safe_filename = attachment.filename.replace(" ", "_")
-                script += f'echo   → {safe_filename}\n'
+                script += f'echo Downloading: {safe_filename}\n'
                 script += f'curl -L -# -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
             script += 'echo.\n'
         
         # Message de fin
         script += """
 echo.
-echo   ╔═══════════════════════════════════════════════╗
-echo   ║             Download Complete!                ║
-echo   ╚═══════════════════════════════════════════════╝
+echo ====================================
+echo          Download Complete!
+echo ====================================
 echo.
-echo   [✓] Files have been downloaded to: !DOWNLOAD_DIR!
+echo [+] Files have been downloaded to: !DOWNLOAD_DIR!
 echo.
-echo   Press any key to exit...
+echo Press any key to exit...
 pause >nul
-exit /b
 """
         
         return script
@@ -831,7 +787,7 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             limit = None if number.value == 0 else number.value
             
             # Variables de suivi
-            media_files = []
+            media_files = {}
             total_size = 0
             processed_messages = 0
             start_time = time.time()
@@ -863,7 +819,9 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                             valid = True
 
                         if valid:
-                            media_files.append(attachment)
+                            if type_key not in media_files:
+                                media_files[type_key] = []
+                            media_files[type_key].append(attachment)
                             total_size += attachment.size
 
             if not media_files:
@@ -872,7 +830,7 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
 
             # Création du thread pour les téléchargements
             thread = await interaction.channel.create_thread(
-                name=f"📥 Download {type_key} ({len(media_files)} files)",
+                name=f"📥 Download {type_key} ({sum(len(files) for files in media_files.values())} files)",
                 type=discord.ChannelType.public_thread
             )
 
@@ -882,7 +840,7 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 "              Media Download Ready               \n"
                 "╚═══════════════════════════════════════════════╝\n\n"
                 f"📊 **Files Found**\n"
-                f"• Total Files: {len(media_files)}\n"
+                f"• Total Files: {sum(len(files) for files in media_files.values())}\n"
                 f"• Messages Analyzed: {processed_messages}\n"
                 f"• Total Size: {self._format_size(total_size)}\n\n"
                 "📥 **Download Instructions**\n"
@@ -912,12 +870,13 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
 
             # Mise à jour des compteurs
             self.bot.download_count += 1
-            self.bot.successful_downloads += len(media_files)
-            self.bot.downloads_by_type[type_key] += len(media_files)
+            self.bot.successful_downloads += sum(len(files) for files in media_files.values())
+            self.bot.failed_downloads += 0
+            self.bot.downloads_by_type[type_key] += sum(len(files) for files in media_files.values())
             self.bot.save_counters()
 
             # Message de confirmation
-            await status_message.edit(content=f"✅ Found {len(media_files)} files! Check the thread for download.")
+            await status_message.edit(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.")
 
         except Exception as e:
             print(f"Error in download_media: {e}")
