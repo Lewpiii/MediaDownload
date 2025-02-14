@@ -753,11 +753,12 @@ Latency    : {round(self.bot.latency * 1000)}ms```━━━━━━━━━━
             )
             
             # Statistiques de téléchargement
+            success_rate = f"{(self.bot.successful_downloads / self.bot.download_count * 100):.1f}%" if self.bot.download_count > 0 else "N/A"
             download_stats = f"""```yml
 Total Downloads : {self.bot.download_count:,}
 Successful     : {self.bot.successful_downloads:,}
 Failed         : {self.bot.failed_downloads:,}
-Success Rate   : {(self.bot.successful_downloads / self.bot.download_count * 100):.1f}% if self.bot.download_count > 0 else "N/A"}```━━━━━━━━━━━━━━━━"""
+Success Rate   : {success_rate}```━━━━━━━━━━━━━━━━"""
             
             embed.add_field(
                 name="📥 Download Statistics",
