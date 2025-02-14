@@ -695,6 +695,9 @@ Download last 200 videos
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
         try:
+            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
+            status_message = await interaction.original_response()
+
             # Vérifier si l'utilisateur a voté
             has_voted = await self.check_vote(interaction.user.id)
             
@@ -717,12 +720,8 @@ Download last 200 videos
                     color=0xFF0000
                 )
                 embed.set_footer(text="Your vote lasts 12 hours!")
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await status_message.edit(embed=embed)
                 return
-
-            status_text = "🔍 Searching for media..."  # Définir status_text ici
-            await interaction.response.send_message(status_text, ephemeral=True)
-            status_message = await interaction.original_response()
 
             # Paramètres de recherche
             type_key = type.value
