@@ -713,10 +713,6 @@ Download last 200 videos
                         elif type_key == "all" and ext in self.bot.media_types['all']:
                             valid = True
 
-                        # Vérification des liens Medal
-                        if "medal.tv" in attachment.url:
-                            valid = True  # Considérer le lien Medal comme valide
-
                         if valid:
                             media_files.append(attachment)
                             total_size += attachment.size
@@ -727,16 +723,7 @@ Download last 200 videos
 
             # Traitement des fichiers à télécharger
             for attachment in media_files:
-                if "medal.tv" in attachment.url:
-                    # Traitez le lien Medal comme un fichier vidéo normal
-                    medal_clip_url = attachment.url  # Vous pouvez extraire le lien direct si nécessaire
-                    # Ajoutez le lien Medal à la liste des fichiers à télécharger
-                    # Ici, nous ajoutons simplement le lien à media_files
-                    # Vous pouvez également créer un objet d'attachement si nécessaire
-                    media_files.append(attachment)  # Ajoutez le lien Medal à la liste
-
                 # Téléchargez les fichiers comme d'habitude
-                # Exemple de téléchargement
                 response = requests.get(attachment.url)
                 if response.status_code == 200:
                     # Enregistrez le fichier ou traitez-le comme nécessaire
