@@ -1,3 +1,3 @@
-download_count = 10547
-successful_downloads = 10543
-failed_downloads = 4
+download_count = 0
+successful_downloads = 0
+failed_downloads = 0
