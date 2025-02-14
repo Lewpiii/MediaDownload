@@ -389,6 +389,7 @@ if __name__ == '__main__':
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
         script = """@echo off
+chcp 65001 > nul
 :: ═══════════════════════════════════════════════════════════════════════════
 ::                    Discord Media Downloader v1.0
 ::                    Created by: Discord Bot
@@ -396,12 +397,13 @@ if __name__ == '__main__':
 
 title Discord Media Downloader
 color 0a
+mode con: cols=70 lines=30
 
 cls
 echo.
-echo   ╔═══════════════════════════════════════════════╗
-echo   ║           Discord Media Downloader            ║
-echo   ╚═══════════════════════════════════════════════╝
+echo   ╔═══════════════════════════════════════════════════════════╗
+echo   ║                Discord Media Downloader                    ║
+echo   ╚═══════════════════════════════════════════════════════════╝
 echo.
 """
         
@@ -409,12 +411,13 @@ echo.
         script += "setlocal enabledelayedexpansion\n\n"
         
         # Interface utilisateur améliorée pour le choix du répertoire
-        script += 'echo   [?] Please choose download location:\n'
-        script += 'echo   Default: Desktop\\MediaDownload\n'
-        script += 'echo   Press Enter to use default or type custom path\n'
+        script += 'echo   [?] Choose download location:\n'
+        script += 'echo   ═══════════════════════════\n'
+        script += 'echo   Default: Desktop\MediaDownload\n'
+        script += 'echo   Press Enter or type custom path\n'
         script += 'echo.\n'
-        script += 'set /p "DOWNLOAD_DIR=  → " || set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n'
-        script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\\Desktop\\MediaDownload"\n\n'
+        script += 'set /p "DOWNLOAD_DIR=   → " || set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n'
+        script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n\n'
         
         # Création des répertoires avec retour visuel
         script += 'echo.\n'
