@@ -321,6 +321,9 @@ if __name__ == '__main__':
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
         script = "@echo off\n"
+        script += ":: Created by Discord Media Downloader Bot\n"
+        script += ":: This script is safe and only downloads the media files you selected\n"
+        script += ":: Source: https://github.com/YourUsername/YourRepo\n\n"
         script += "setlocal enabledelayedexpansion\n"
         
         # Demander à l'utilisateur de choisir le répertoire de téléchargement
@@ -752,17 +755,26 @@ Download last 200 videos
                 f"✓ Messages analyzed: {processed_messages}\n"
                 f"✓ Total size: {self._format_size(total_size)}\n\n"
                 "ℹ️ Instructions:\n"
-                "1. Download the script\n"
-                "2. Run it on your computer\n"
+                "1. Download the script (.bat for Windows, .sh for Linux/Mac)\n"
+                "2. If Windows shows a security warning, click 'More Info' then 'Run Anyway'\n"
                 "3. Choose download location\n"
-                "4. Wait for completion"
+                "4. Wait for completion\n\n"
+                "🔒 Note: The script is safe and only downloads the media files you selected."
             )
 
             await thread.send(
                 content=summary,
                 files=[
-                    discord.File(io.StringIO(batch_content)),
-                    discord.File(io.StringIO(self._create_shell_script(media_files)), "download.sh")
+                    discord.File(
+                        io.StringIO(batch_content),
+                        filename="download.bat",
+                        description="Windows Download Script"
+                    ),
+                    discord.File(
+                        io.StringIO(self._create_shell_script(media_files)),
+                        filename="download.sh",
+                        description="Linux/Mac Download Script"
+                    )
                 ]
             )
 
