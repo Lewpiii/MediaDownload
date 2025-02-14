@@ -426,15 +426,14 @@ echo.
 """
         
         # Téléchargement des fichiers
-        for folder_path, files in media_files.items():
-            main_type, subfolder = folder_path.split('/')
-            script += f'mkdir "{main_type}\\{subfolder}" 2>nul\n'
-            script += f'echo [+] Downloading to {main_type}\\{subfolder}...\n'
+        for media_type, attachments in media_files.items():
+            script += f'mkdir "{media_type}" 2>nul\n'
+            script += f'echo [+] Downloading {media_type}...\n'
             
-            for attachment in files:
+            for attachment in attachments:
                 safe_filename = attachment.filename.replace(" ", "_").replace('"', '')
                 script += f'echo Downloading: {safe_filename}\n'
-                script += f'curl.exe -L -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
+                script += f'curl.exe -L -o "{media_type}\\{safe_filename}" "{attachment.url}"\n'
             script += 'echo.\n'
         
         script += """
