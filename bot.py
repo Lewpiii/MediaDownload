@@ -781,7 +781,7 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             limit = None if number.value == 0 else number.value
             
             # Variables de suivi
-            media_files = {}
+            media_files = {type_key: []}  # Initialisation avec le type de média comme clé
             total_size = 0
             processed_messages = 0
             start_time = time.time()
