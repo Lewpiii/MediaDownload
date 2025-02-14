@@ -394,15 +394,6 @@ if __name__ == '__main__':
 ::                    Created by: Discord Bot
 :: ═══════════════════════════════════════════════════════════════════════════
 
-:: Auto-elevation script
-echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\\getadmin.vbs"
-echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\\getadmin.vbs"
-"%temp%\\getadmin.vbs"
-del "%temp%\\getadmin.vbs"
-exit /B
-
-:START
-@echo off
 title Discord Media Downloader
 color 0a
 
