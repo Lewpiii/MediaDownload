@@ -789,7 +789,7 @@ Download last 200 videos
                 f"✓ Total size: {self._format_size(total_size)}\n\n"
                 "ℹ️ Instructions:\n"
                 "1. Download the script (.bat for Windows, .sh for Linux/Mac)\n"
-                "2. If Windows shows a security warning, click 'More Info' then 'Run Anyway'\n"
+                "2. Windows will ask for administrator privileges (this is normal and safe)\n"
                 "3. Choose download location\n"
                 "4. Wait for completion\n\n"
                 "🔒 Note: The script is safe and only downloads the media files you selected."
