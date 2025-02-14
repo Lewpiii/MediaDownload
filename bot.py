@@ -400,48 +400,43 @@ echo ====================================
 echo      Discord Media Downloader
 echo ====================================
 echo.
+
+setlocal enabledelayedexpansion
+
+echo [?] Choose download location:
+echo ------------------------------------
+echo Default: Desktop\MediaDownload
+echo Press Enter or type custom path
+echo.
+set /p "DOWNLOAD_DIR=-> " || set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"
+if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"
+
+echo.
+echo [+] Creating directories...
+echo.
+mkdir "!DOWNLOAD_DIR!" 2>nul
+cd /d "!DOWNLOAD_DIR!"
+
+mkdir Images 2>nul && echo [+] Created Images folder
+mkdir Videos 2>nul && echo [+] Created Videos folder
+echo.
+
+echo [+] Starting downloads...
+echo.
 """
         
-        # Configuration initiale
-        script += "setlocal enabledelayedexpansion\n\n"
-        
-        # Interface utilisateur améliorée pour le choix du répertoire
-        script += 'echo [?] Choose download location:\n'
-        script += 'echo ------------------------------------\n'
-        script += 'echo Default: Desktop\MediaDownload\n'
-        script += 'echo Press Enter or type custom path\n'
-        script += 'echo.\n'
-        script += 'set /p "DOWNLOAD_DIR=-> " || set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n'
-        script += 'if "!DOWNLOAD_DIR!"=="" set "DOWNLOAD_DIR=%USERPROFILE%\Desktop\MediaDownload"\n\n'
-        
-        # Création des répertoires avec retour visuel
-        script += 'echo.\n'
-        script += 'echo [+] Creating directories...\n'
-        script += 'echo.\n'
-        script += 'mkdir "!DOWNLOAD_DIR!" 2>nul\n'
-        script += 'cd /d "!DOWNLOAD_DIR!"\n\n'
-        
-        # Création des dossiers principaux avec feedback
-        script += 'mkdir Images 2>nul && echo [+] Created Images folder\n'
-        script += 'mkdir Videos 2>nul && echo [+] Created Videos folder\n'
-        script += 'echo.\n\n'
-        
         # Téléchargement des fichiers
-        script += 'echo [+] Starting downloads...\n'
-        script += 'echo.\n'
-        
         for folder_path, files in media_files.items():
             main_type, subfolder = folder_path.split('/')
             script += f'mkdir "{main_type}\\{subfolder}" 2>nul\n'
             script += f'echo [+] Downloading to {main_type}\\{subfolder}...\n'
             
             for attachment in files:
-                safe_filename = attachment.filename.replace(" ", "_")
+                safe_filename = attachment.filename.replace(" ", "_").replace('"', '')
                 script += f'echo Downloading: {safe_filename}\n'
-                script += f'curl -L -# -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
+                script += f'curl.exe -L -o "{main_type}\\{subfolder}\\{safe_filename}" "{attachment.url}"\n'
             script += 'echo.\n'
         
-        # Message de fin
         script += """
 echo.
 echo ====================================
