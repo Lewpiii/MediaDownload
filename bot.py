@@ -324,7 +324,39 @@ if __name__ == '__main__':
         script += ":: Created by Discord Media Downloader Bot\n"
         script += ":: This script is safe and only downloads the media files you selected\n"
         script += ":: Source: https://github.com/YourUsername/YourRepo\n\n"
-        script += "setlocal enabledelayedexpansion\n"
+        
+        # Ajout de l'élévation des privilèges
+        script += ":---------------------------------------- Script d'élévation des privilèges administrateur ----------------------------------------\n"
+        script += "REM  -->  Verification des permissions\n"
+        script += ">nul 2>&1 \"%SYSTEMROOT%\\system32\\cacls.exe\" \"%SYSTEMROOT%\\system32\\config\\system\"\n\n"
+        
+        script += "REM --> Erreur vous ne possedez pas les droits admin\n"
+        script += "if '%errorlevel%' NEQ '0' (\n"
+        script += "    echo Verification des privileges administrateur\n"
+        script += "    goto UACPrompt\n"
+        script += ") else ( goto gotAdmin )\n\n"
+        
+        script += ":UACPrompt\n"
+        script += "Set User_Profile=%USERPROFILE%\n"
+        script += "Set User_Profile=%User_Profile: =_-_%\n\n"
+        
+        script += "echo Set UAC = CreateObject^(\"Shell.Application\"^) > \"%temp%\\getadmin.vbs\"\n"
+        script += "echo UAC.ShellExecute \"%~s0\", \"%User_Profile%\", \"\", \"runas\", 1 >> \"%temp%\\getadmin.vbs\"\n\n"
+        
+        script += "\"%temp%\\getadmin.vbs\"\n"
+        script += "exit /B\n\n"
+        
+        script += ":gotAdmin\n"
+        script += "Set User_Profile=%1\n"
+        script += "set User_Profile=%User_Profile:_-_= %\n\n"
+        
+        script += "if \"%1\" == \"\" (set Demarrage=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\) else (set Demarrage=%User_Profile%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\)\n"
+        script += "if exist \"%temp%\\getadmin.vbs\" ( del \"%temp%\\getadmin.vbs\" )\n"
+        script += "pushd \"%CD%\"\n"
+        script += "CD /D \"%~dp0\"\n\n"
+        
+        # Le reste du script original
+        script += "setlocal enabledelayedexpansion\n\n"
         
         # Demander à l'utilisateur de choisir le répertoire de téléchargement
         script += 'set /p "DOWNLOAD_DIR=  [?] Enter download directory path (default: Desktop\\MediaDownload): " || '
@@ -675,7 +707,8 @@ Download last 200 videos
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
 
-            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
+            status_text = "🔍 Searching for media..."  # Définir status_text ici
+            await interaction.response.send_message(status_text, ephemeral=True)
             status_message = await interaction.original_response()
 
             # Paramètres de recherche
