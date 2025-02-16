@@ -386,6 +386,47 @@ if __name__ == '__main__':
         
         return exe_script
 
+    def _categorize_video(self, filename: str) -> str:
+        """Utilise l'IA pour catégoriser les vidéos en fonction de leur nom"""
+        filename_lower = filename.lower()
+        
+        # Catégories de jeux avec mots-clés associés
+        categories = {
+            'Minecraft': ['minecraft', 'mc', '.mc', 'craft'],
+            'Valorant': ['valorant', 'valo', 'val'],
+            'Counter-Strike': ['csgo', 'cs2', 'cs:go', 'counter', 'strike'],
+            'League of Legends': ['lol', 'league', 'legends'],
+            'Fortnite': ['fortnite', 'fn'],
+            'GTA': ['gta', 'grand theft auto'],
+            'Apex Legends': ['apex'],
+            'Rocket League': ['rocket', 'rl'],
+            'Call of Duty': ['cod', 'warzone', 'modern warfare', 'call of duty'],
+            'Rainbow Six': ['r6', 'rainbow', 'siege'],
+            
+            # Autres types de contenu
+            'Clips': ['clip', 'highlight', 'play', 'clutch', 'ace'],
+            'Montages': ['montage', 'edit', 'compilation', 'best of'],
+            'Tutorials': ['tuto', 'tutorial', 'guide', 'how to'],
+            'Streams': ['stream', 'live', 'vod'],
+            'Funny Moments': ['funny', 'fail', 'meme', 'troll'],
+            'Gameplay': ['gameplay', 'playthrough', 'let\'s play'],
+        }
+        
+        # Vérifier les correspondances
+        for category, keywords in categories.items():
+            if any(keyword in filename_lower for keyword in keywords):
+                return category
+                
+        # Analyse plus poussée pour les cas ambigus
+        if any(word in filename_lower for word in ['kill', 'frag', 'shot']):
+            return 'Action Highlights'
+        elif any(word in filename_lower for word in ['win', 'victory', 'champion']):
+            return 'Victory Moments'
+        elif any(word in filename_lower for word in ['bug', 'glitch', 'exploit']):
+            return 'Bugs & Glitches'
+            
+        return 'Other Videos'
+
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
         script = """@echo off
@@ -419,21 +460,31 @@ cd /d "!DOWNLOAD_DIR!"
 
 mkdir Images 2>nul && echo [+] Created Images folder
 mkdir Videos 2>nul && echo [+] Created Videos folder
-echo.
-
-echo [+] Starting downloads...
-echo.
 """
+
+        # Création des dossiers pour chaque catégorie
+        categories_created = set()
         
-        # Téléchargement des fichiers
+        # Téléchargement et catégorisation des fichiers
         for media_type, attachments in media_files.items():
-            script += f'mkdir "{media_type}" 2>nul\n'
-            script += f'echo [+] Downloading {media_type}...\n'
-            
             for attachment in attachments:
                 safe_filename = attachment.filename.replace(" ", "_").replace('"', '')
-                script += f'echo Downloading: {safe_filename}\n'
-                script += f'curl.exe -L -o "{media_type}\\{safe_filename}" "{attachment.url}"\n'
+                
+                if media_type == "videos":
+                    # Utiliser l'IA pour catégoriser
+                    category = self._categorize_video(safe_filename)
+                    
+                    # Créer le dossier s'il n'existe pas déjà
+                    if category not in categories_created:
+                        script += f'mkdir "Videos\\{category}" 2>nul\n'
+                        categories_created.add(category)
+                    
+                    script += f'echo Downloading: {safe_filename} -> {category}\n'
+                    script += f'curl.exe -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
+                else:
+                    script += f'echo Downloading: {safe_filename}\n'
+                    script += f'curl.exe -L -o "Images\\{safe_filename}" "{attachment.url}"\n'
+                
             script += 'echo.\n'
         
         script += """
