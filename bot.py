@@ -359,32 +359,52 @@ class DownloadCog(commands.Cog):
             print(f"Erreur Top.gg: {e}")
             return False  # En cas d'erreur, on refuse l'accès
 
-    def _create_exe_wrapper(self, batch_content):
-        """Create an exe wrapper for the batch script"""
-        exe_script = f'''
-import os
-import sys
-import tempfile
-import subprocess
-
-def main():
-    # Créer un fichier batch temporaire
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
-        f.write("""{batch_content}""")
-        batch_path = f.name
-    
-    try:
-        # Exécuter le batch
-        subprocess.run([batch_path], shell=True)
-    finally:
-        # Nettoyer
-        os.unlink(batch_path)
-
-if __name__ == '__main__':
-    main()
-    '''
+    def _analyze_video_content(self, filename: str) -> str:
+        """Analyse le contenu de la vidéo avec l'IA pour déterminer sa catégorie"""
+        # Nettoyer le nom du fichier pour l'analyse
+        clean_name = filename.lower().replace('_', ' ').replace('-', ' ')
         
-        return exe_script
+        # Demander à Claude d'analyser le nom de la vidéo
+        analysis = f"""
+        Based on the video filename: "{clean_name}"
+        What is the main subject/game/content type? Consider:
+        - Game names (Minecraft, Valorant, etc.)
+        - Content types (Montage, Gameplay, Tutorial)
+        - Specific events (Tournament, Stream Highlights)
+        Return just the category name, creating a new one if needed.
+        """
+        
+        # Simuler la réponse de Claude (à remplacer par une vraie API IA plus tard)
+        if 'minecraft' in clean_name or 'mc' in clean_name:
+            return 'Minecraft'
+        elif 'valorant' in clean_name or 'valo' in clean_name:
+            return 'Valorant'
+        elif 'cs2' in clean_name or 'csgo' in clean_name:
+            return 'Counter-Strike'
+        elif 'lol' in clean_name or 'league' in clean_name:
+            return 'League of Legends'
+        elif 'montage' in clean_name:
+            return 'Montages'
+        elif 'tutorial' in clean_name or 'guide' in clean_name:
+            return 'Tutorials'
+        elif 'stream' in clean_name or 'live' in clean_name:
+            return 'Streams'
+        elif 'funny' in clean_name or 'fail' in clean_name:
+            return 'Funny Moments'
+        else:
+            # Analyse plus poussée du contexte
+            words = clean_name.split()
+            if any(word in words for word in ['kill', 'clutch', 'ace']):
+                return 'Highlights'
+            elif any(word in words for word in ['gameplay', 'play']):
+                return 'Gameplay'
+            
+            # Si aucune catégorie n'est détectée, créer une nouvelle basée sur les mots significatifs
+            significant_words = [w for w in words if len(w) > 3]
+            if significant_words:
+                return significant_words[0].title()
+            
+            return 'Other'
 
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
@@ -421,21 +441,19 @@ mkdir "Images" 2>nul
 mkdir "Videos" 2>nul
 """
 
-        # Création des sous-dossiers pour les vidéos
-        video_categories = {
-            'Minecraft': ['minecraft', 'mc', 'craft'],
-            'Valorant': ['valorant', 'valo'],
-            'CS2': ['cs2', 'counter-strike', 'csgo'],
-            'League of Legends': ['lol', 'league'],
-            'Fortnite': ['fortnite', 'fn'],
-            'GTA': ['gta'],
-            'Apex Legends': ['apex'],
-            'Rocket League': ['rocket'],
-            'Other': []
-        }
+        # Analyser d'abord toutes les vidéos et créer une liste des catégories nécessaires
+        video_categories = set()
+        video_mapping = {}  # Pour stocker la catégorie de chaque vidéo
 
-        # Créer les dossiers de jeux
-        for category in video_categories.keys():
+        for media_type, attachments in media_files.items():
+            if media_type == "videos":
+                for attachment in attachments:
+                    category = self._analyze_video_content(attachment.filename)
+                    video_categories.add(category)
+                    video_mapping[attachment.filename] = category
+
+        # Créer uniquement les dossiers nécessaires
+        for category in video_categories:
             script += f'mkdir "Videos\\{category}" 2>nul\n'
 
         script += """
@@ -447,18 +465,11 @@ echo.
         for media_type, attachments in media_files.items():
             for attachment in attachments:
                 safe_filename = attachment.filename.replace(" ", "_").replace('"', '')
-                filename_lower = safe_filename.lower()
 
                 if media_type == "videos":
-                    # Trouver la catégorie appropriée
-                    found_category = "Other"
-                    for category, keywords in video_categories.items():
-                        if any(keyword in filename_lower for keyword in keywords):
-                            found_category = category
-                            break
-
-                    script += f'echo Downloading video: {safe_filename} to {found_category}\n'
-                    script += f'curl.exe -L -o "Videos\\{found_category}\\{safe_filename}" "{attachment.url}"\n'
+                    category = video_mapping[attachment.filename]
+                    script += f'echo Downloading video: {safe_filename} to {category}\n'
+                    script += f'curl.exe -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
                 else:
                     script += f'echo Downloading image: {safe_filename}\n'
                     script += f'curl.exe -L -o "Images\\{safe_filename}" "{attachment.url}"\n'
