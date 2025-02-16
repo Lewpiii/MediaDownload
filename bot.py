@@ -107,9 +107,9 @@ class MediaDownload(commands.Bot):
                 
                 # Alterner le statut
                 if current_time.second % 10 < 5:
-                    status_text = "🤖 Media Downloader"
+                    status_text = f"/help for {len(self.users)} users"
                 else:
-                    status_text = f"📊 {len(self.guilds)} servers"
+                    status_text = f"/help for {len(self.guilds)} servers"
                     
                 activity = discord.Activity(
                     type=discord.ActivityType.watching, 
@@ -445,12 +445,22 @@ mkdir "Videos" 2>nul
         video_categories = set()
         video_mapping = {}  # Pour stocker la catégorie de chaque vidéo
 
-        for media_type, attachments in media_files.items():
-            if media_type == "videos":
-                for attachment in attachments:
-                    category = self._analyze_video_content(attachment.filename)
-                    video_categories.add(category)
-                    video_mapping[attachment.filename] = category
+        # Vérifier l'extension du fichier pour déterminer le type
+        def is_video(filename):
+            video_extensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv']
+            return any(filename.lower().endswith(ext) for ext in video_extensions)
+
+        def is_image(filename):
+            image_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+            return any(filename.lower().endswith(ext) for ext in image_extensions)
+
+        # Analyser et catégoriser les fichiers
+        for attachment in media_files.get('all', []):
+            filename = attachment.filename
+            if is_video(filename):
+                category = self._analyze_video_content(filename)
+                video_categories.add(category)
+                video_mapping[filename] = category
 
         # Créer uniquement les dossiers nécessaires
         for category in video_categories:
@@ -462,17 +472,17 @@ echo.
 """
         
         # Téléchargement des fichiers
-        for media_type, attachments in media_files.items():
-            for attachment in attachments:
-                safe_filename = attachment.filename.replace(" ", "_").replace('"', '')
+        for attachment in media_files.get('all', []):
+            filename = attachment.filename
+            safe_filename = filename.replace(" ", "_").replace('"', '')
 
-                if media_type == "videos":
-                    category = video_mapping[attachment.filename]
-                    script += f'echo Downloading video: {safe_filename} to {category}\n'
-                    script += f'curl.exe -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
-                else:
-                    script += f'echo Downloading image: {safe_filename}\n'
-                    script += f'curl.exe -L -o "Images\\{safe_filename}" "{attachment.url}"\n'
+            if is_video(filename):
+                category = video_mapping[filename]
+                script += f'echo Downloading video: {safe_filename} to {category}\n'
+                script += f'curl.exe -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
+            elif is_image(filename):
+                script += f'echo Downloading image: {safe_filename}\n'
+                script += f'curl.exe -L -o "Images\\{safe_filename}" "{attachment.url}"\n'
 
         script += """
 echo.
