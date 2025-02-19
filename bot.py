@@ -341,24 +341,40 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
     async def upload_to_gofile(self, file_path):
         """Upload un fichier sur Gofile"""
         try:
+            print(f"Starting Gofile upload process for file: {file_path}")
+            print(f"File size: {os.path.getsize(file_path)} bytes")
+
             async with aiohttp.ClientSession() as session:
                 # 1. Obtenir le meilleur serveur
-                async with session.get('https://api.gofile.io/getServer') as response:
+                print("Getting Gofile server...")
+                server_url = 'https://api.gofile.io/getServer'
+                print(f"Requesting server from: {server_url}")
+                
+                async with session.get(server_url) as response:
+                    print(f"Server response status: {response.status}")
                     if response.status != 200:
+                        response_text = await response.text()
+                        print(f"Server error response: {response_text}")
                         raise Exception(f"Server request failed with status {response.status}")
                     
                     server_data = await response.json()
-                    print(f"Server response: {server_data}")  # Debug
+                    print(f"Server response data: {server_data}")
                     
                     if server_data.get('status') != 'ok':
                         raise Exception(f"Bad server response: {server_data}")
                     
                     server = server_data['data']['server']
+                    print(f"Got server: {server}")
 
                 # 2. Upload le fichier
-                url = f'https://{server}.gofile.io/uploadFile'
-                print(f"Uploading to: {url}")  # Debug
+                upload_url = f'https://{server}.gofile.io/uploadFile'
+                print(f"Uploading to URL: {upload_url}")
                 
+                # Vérifier que le fichier existe et est accessible
+                if not os.path.exists(file_path):
+                    raise Exception(f"File not found: {file_path}")
+                
+                # Créer le form data
                 form_data = aiohttp.FormData()
                 form_data.add_field(
                     'file',
@@ -367,20 +383,29 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                     content_type='application/zip'
                 )
 
-                async with session.post(url, data=form_data) as response:
+                print("Starting file upload...")
+                async with session.post(upload_url, data=form_data) as response:
+                    print(f"Upload response status: {response.status}")
                     if response.status != 200:
+                        response_text = await response.text()
+                        print(f"Upload error response: {response_text}")
                         raise Exception(f"Upload failed with status {response.status}")
                     
                     upload_data = await response.json()
-                    print(f"Upload response: {upload_data}")  # Debug
+                    print(f"Upload response data: {upload_data}")
                     
                     if upload_data.get('status') != 'ok':
                         raise Exception(f"Upload failed: {upload_data}")
                     
-                    return upload_data['data']['downloadPage']
+                    download_link = upload_data['data']['downloadPage']
+                    print(f"Successfully got download link: {download_link}")
+                    return download_link
                     
         except Exception as e:
-            print(f"Gofile upload error: {str(e)}")  # Debug
+            print(f"Detailed Gofile upload error: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             raise
 
 class DownloadCog(commands.Cog):
