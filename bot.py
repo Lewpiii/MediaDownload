@@ -340,29 +340,48 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
 
     async def upload_to_gofile(self, file_path):
         """Upload un fichier sur Gofile"""
-        async with aiohttp.ClientSession() as session:
-            # 1. Obtenir le meilleur serveur
-            async with session.get('https://api.gofile.io/getServer') as response:
-                server_data = await response.json()
-                if server_data.get('status') != 'ok':
-                    raise Exception("Couldn't get Gofile.io server")
-                
-                server = server_data['data']['server']
+        try:
+            async with aiohttp.ClientSession() as session:
+                # 1. Obtenir le meilleur serveur
+                async with session.get('https://api.gofile.io/getServer') as response:
+                    if response.status != 200:
+                        raise Exception(f"Server request failed with status {response.status}")
+                    
+                    server_data = await response.json()
+                    print(f"Server response: {server_data}")  # Debug
+                    
+                    if server_data.get('status') != 'ok':
+                        raise Exception(f"Bad server response: {server_data}")
+                    
+                    server = server_data['data']['server']
 
-            # 2. Upload le fichier
-            url = f'https://{server}.gofile.io/uploadFile'
-            
-            form_data = aiohttp.FormData()
-            form_data.add_field('file', open(file_path, 'rb'))
+                # 2. Upload le fichier
+                url = f'https://{server}.gofile.io/uploadFile'
+                print(f"Uploading to: {url}")  # Debug
+                
+                form_data = aiohttp.FormData()
+                form_data.add_field(
+                    'file',
+                    open(file_path, 'rb'),
+                    filename=os.path.basename(file_path),
+                    content_type='application/zip'
+                )
 
-            async with session.post(url, data=form_data) as response:
-                upload_data = await response.json()
-                
-                if upload_data.get('status') != 'ok':
-                    raise Exception("Upload failed")
-                
-                # Le lien direct de téléchargement
-                return upload_data['data']['downloadPage']
+                async with session.post(url, data=form_data) as response:
+                    if response.status != 200:
+                        raise Exception(f"Upload failed with status {response.status}")
+                    
+                    upload_data = await response.json()
+                    print(f"Upload response: {upload_data}")  # Debug
+                    
+                    if upload_data.get('status') != 'ok':
+                        raise Exception(f"Upload failed: {upload_data}")
+                    
+                    return upload_data['data']['downloadPage']
+                    
+        except Exception as e:
+            print(f"Gofile upload error: {str(e)}")  # Debug
+            raise
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
@@ -826,7 +845,6 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
         app_commands.Choice(name="All messages", value=0)
     ])
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
-        # Répondre immédiatement à Discord
         await interaction.response.defer(ephemeral=True, thinking=True)
         
         try:
@@ -931,42 +949,60 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 await status_message.edit(content="☁️ Uploading to Gofile...")
 
                 try:
-                    download_link = await self.upload_to_gofile(zip_path)
-                    
-                    # Créer l'embed avec le lien
-                    embed = discord.Embed(
-                        title="📥 Download Ready!",
-                        description=(
-                            f"[Click here to download all files]({download_link})\n\n"
-                            f"**Total files:** {len(files_to_download)}\n"
-                            f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
-                            f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
-                            "⚠️ *Note: Files are stored on Gofile.io*"
-                        ),
-                        color=0x00ff00
-                    )
-                    await status_message.delete()
-                    await thread.send(embed=embed)
+                    for attempt in range(3):  # Essayer 3 fois
+                        try:
+                            download_link = await self.upload_to_gofile(zip_path)
+                            
+                            # Créer l'embed avec le lien
+                            embed = discord.Embed(
+                                title="📥 Download Ready!",
+                                description=(
+                                    f"[Click here to download all files]({download_link})\n\n"
+                                    f"**Total files:** {len(files_to_download)}\n"
+                                    f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
+                                    f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
+                                    "⚠️ *Note: Files are stored on Gofile.io*"
+                                ),
+                                color=0x00ff00
+                            )
+                            await status_message.delete()
+                            await thread.send(embed=embed)
+                            break
+                        except Exception as upload_error:
+                            if attempt < 2:  # Si ce n'est pas la dernière tentative
+                                await status_message.edit(content=f"☁️ Upload attempt {attempt + 1} failed, retrying...")
+                                await asyncio.sleep(2)  # Attendre un peu avant de réessayer
+                            else:
+                                raise upload_error
 
                 except Exception as upload_error:
-                    print(f"Upload error: {upload_error}")
-                    # Si l'upload échoue, envoyer le fichier directement sur Discord
-                    await status_message.edit(content="⚠️ Cloud upload failed, sending file directly...")
+                    print(f"All upload attempts failed: {upload_error}")
+                    # Si l'upload échoue après toutes les tentatives
+                    await status_message.edit(content="⚠️ Cloud upload failed, trying alternative method...")
                     
+                    # Essayer d'envoyer directement sur Discord
                     if os.path.getsize(zip_path) < 25 * 1024 * 1024:  # Si moins de 25MB
                         await thread.send(
                             "📦 Here's your file:",
                             file=discord.File(zip_path, filename=zip_name)
                         )
                     else:
-                        await thread.send("❌ File is too large to send directly through Discord. Please try with fewer files.")
+                        # Si le fichier est trop gros, proposer des alternatives
+                        alternative_message = (
+                            "❌ File is too large to send directly.\n\n"
+                            "Suggestions:\n"
+                            "1. Try downloading fewer files at once\n"
+                            "2. Use `/download images` or `/download videos` separately\n"
+                            "3. Try with a smaller number of messages"
+                        )
+                        await thread.send(alternative_message)
                     
                     await status_message.delete()
 
-            await interaction.followup.send(
-                f"✅ Download ready! Check thread {thread.mention}",
-                ephemeral=True
-            )
+                await interaction.followup.send(
+                    f"✅ Process complete! Check thread {thread.mention}",
+                    ephemeral=True
+                )
 
         except Exception as e:
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
