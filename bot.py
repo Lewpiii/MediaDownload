@@ -353,12 +353,15 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                     async with session.post(url, data=form_data) as response:
                         if response.status == 200:
                             download_link = await response.text()
-                            download_link = download_link.strip()  # Enlever les espaces/newlines
+                            download_link = download_link.strip()
                             print(f"Upload successful, link: {download_link}")
                             return download_link
                         else:
                             error_text = await response.text()
                             raise Exception(f"Upload failed with status {response.status}: {error_text}")
+        except Exception as e:
+            print(f"Upload error: {e}")
+            raise
 
     async def upload_to_anonfiles(self, file_path):
         """Upload un fichier sur anonfiles"""
