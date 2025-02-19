@@ -830,7 +830,7 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 limit = None if number.value == 0 else number.value
                 
                 # Variables de suivi
-                media_files = {type_key: []}  # Initialisation avec le type de média comme clé
+                media_files = []
                 total_size = 0
                 processed_messages = 0
                 start_time = time.time()
@@ -862,78 +862,46 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                                 valid = True
 
                             if valid:
-                                if type_key not in media_files:
-                                    media_files[type_key] = []
-                                media_files[type_key].append(attachment)
+                                media_files.append(attachment)
                                 total_size += attachment.size
 
                 if not media_files:
                     await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
                     return
 
-                # Création du thread pour les téléchargements
-                thread = await interaction.channel.create_thread(
-                    name=f"📥 Download {type_key} ({sum(len(files) for files in media_files.values())} files)",
-                    type=discord.ChannelType.public_thread
-                )
+                # Traitement des fichiers à télécharger
+                if isinstance(interaction.channel, discord.TextChannel):
+                    # Créer un thread si nous sommes dans un canal de serveur
+                    thread = await interaction.channel.create_thread(
+                        name=f"📥 Download {type.value} ({len(media_files)} files)",
+                        type=discord.ChannelType.public_thread
+                    )
+                else:
+                    # Si c'est un DM, utilisez simplement le canal de DM
+                    thread = interaction.channel
 
-                # Message récapitulatif
-                summary = (
-                    "╔═══════════════════════════════════════════════╗\n"
-                    "              Media Download Ready               \n"
-                    "╚═══════════════════════════════════════════════╝\n\n"
-                    f"📊 **Files Found**\n"
-                    f"• Total Files: {sum(len(files) for files in media_files.values())}\n"
-                    f"• Messages Analyzed: {processed_messages}\n"
-                    f"• Total Size: {self._format_size(total_size)}\n\n"
-                    "📥 **Download Instructions**\n"
-                    "1. Download `MediaDownloader.bat`\n"
-                    "2. Double-click to run\n"
-                    "3. Choose download location\n"
-                    "4. Wait for completion\n\n"
-                    "🛡️ **Security Information**\n"
-                    "• Verified Safe Script\n"
-                    "• Auto-organizing Downloads\n"
-                    "• Smart Folder Structure\n"
-                )
+                # Téléchargez les fichiers comme d'habitude
+                for attachment in media_files:
+                    response = requests.get(attachment.url)
+                    if response.status_code == 200:
+                        # Enregistrez le fichier ou traitez-le comme nécessaire
+                        with open(f"{attachment.filename}", 'wb') as f:
+                            f.write(response.content)
+                        self.bot.successful_downloads += 1
+                    else:
+                        self.bot.failed_downloads += 1
 
-                # Création et envoi du script
-                batch_content = self._create_batch_script(media_files)
-
-                await thread.send(
-                    content=summary,
-                    files=[
-                        discord.File(
-                            io.StringIO(batch_content),
-                            filename="MediaDownloader.bat",
-                            description="Windows Download Script"
-                        )
-                    ]
-                )
-
-                # Mise à jour des compteurs
-                self.bot.download_count += 1
-                self.bot.successful_downloads += sum(len(files) for files in media_files.values())
-                self.bot.failed_downloads += 0
-                self.bot.downloads_by_type[type_key] += sum(len(files) for files in media_files.values())
-                self.bot.save_counters()
-
-                # Message de confirmation
-                try:
-                    await status_message.edit(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.")
-                except discord.NotFound:
-                    await interaction.followup.send(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.", ephemeral=True)
+                # Envoyer un message de confirmation dans le thread ou le canal DM
+                await thread.send(f"✅ Download complete! {len(media_files)} files downloaded.")
 
             except discord.NotFound:
                 # Si l'interaction a expiré, on envoie un nouveau message
                 await interaction.followup.send("❌ The interaction has expired. Please try the command again.", ephemeral=True)
 
         except Exception as e:
-            try:
-                await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-            except discord.NotFound:
-                print(f"Error in download_media and couldn't send followup: {e}")
-            await self.bot.send_error_log("download command", e)
+            print(f"Error in download_media: {e}")
+            self.bot.failed_downloads += 1  # Incrémenter le compteur d'échecs
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
