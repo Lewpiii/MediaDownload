@@ -803,15 +803,9 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             
             # Collecter les fichiers
             files_to_download = []
-            messages = []
-            
-            # Définir la limite de messages
             limit = None if number.value == 0 else number.value
             
-            # Récupérer les messages
             async for message in interaction.channel.history(limit=limit):
-                messages.append(message)
-                
                 for attachment in message.attachments:
                     # Vérifier le type de fichier
                     is_image = attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
@@ -820,38 +814,66 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                     if type.value == "all" or \
                        (type.value == "images" and is_image) or \
                        (type.value == "videos" and is_video):
-                        files_to_download.append(
-                            MediaFile(
-                                filename=attachment.filename,
-                                url=attachment.url,
-                                size=attachment.size
-                            )
-                        )
+                        files_to_download.append(attachment)
 
             if not files_to_download:
                 await interaction.followup.send("❌ No files found!", ephemeral=True)
                 return
 
-            # Create thread for download
+            # Créer un thread pour le suivi
             thread = await interaction.channel.create_thread(
                 name=f"📥 Download all ({len(files_to_download)} files)",
                 auto_archive_duration=60
             )
 
-            await thread.send(f"🔍 Found {len(files_to_download)} files to download!")
-
-            # Launch download window
-            from downloader_gui import show_downloader
-            show_downloader(files_to_download)
-
-            await interaction.followup.send(
-                f"✅ Download started! Check thread {thread.mention}",
-                ephemeral=True
-            )
+            # Vérifier si on est sur le serveur
+            is_server = os.environ.get('IS_SERVER', True)  # Par défaut True pour Render
+            
+            if is_server:
+                # Version serveur : envoyer les liens de téléchargement
+                chunks = []
+                current_chunk = []
+                current_length = 0
+                
+                for file in files_to_download:
+                    file_line = f"• [{file.filename}]({file.url})"
+                    if current_length + len(file_line) > 3800:  # Discord limit
+                        chunks.append(current_chunk)
+                        current_chunk = []
+                        current_length = 0
+                    current_chunk.append(file_line)
+                    current_length += len(file_line)
+                
+                if current_chunk:
+                    chunks.append(current_chunk)
+                
+                # Envoyer les embeds avec les liens
+                for i, chunk in enumerate(chunks):
+                    embed = discord.Embed(
+                        title=f"📥 Download Links (Part {i+1}/{len(chunks)})",
+                        description="\n".join(chunk),
+                        color=0x5865F2
+                    )
+                    await thread.send(embed=embed)
+                
+                await interaction.followup.send(
+                    f"✅ Download links ready! Check thread {thread.mention}",
+                    ephemeral=True
+                )
+                
+            else:
+                # Version locale : utiliser l'interface graphique
+                from downloader_gui import show_downloader
+                show_downloader(files_to_download)
+                
+                await interaction.followup.send(
+                    f"✅ Download started! Check thread {thread.mention}",
+                    ephemeral=True
+                )
 
         except Exception as e:
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-            await self.bot.send_error_log("download command", e)
+            await self.send_error_log("download command", e)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
