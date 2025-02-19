@@ -338,6 +338,32 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
 
+    async def upload_to_gofile(self, file_path):
+        """Upload un fichier sur Gofile"""
+        async with aiohttp.ClientSession() as session:
+            # 1. Obtenir le meilleur serveur
+            async with session.get('https://api.gofile.io/getServer') as response:
+                server_data = await response.json()
+                if server_data.get('status') != 'ok':
+                    raise Exception("Couldn't get Gofile.io server")
+                
+                server = server_data['data']['server']
+
+            # 2. Upload le fichier
+            url = f'https://{server}.gofile.io/uploadFile'
+            
+            form_data = aiohttp.FormData()
+            form_data.add_field('file', open(file_path, 'rb'))
+
+            async with session.post(url, data=form_data) as response:
+                upload_data = await response.json()
+                
+                if upload_data.get('status') != 'ok':
+                    raise Exception("Upload failed")
+                
+                # Le lien direct de téléchargement
+                return upload_data['data']['downloadPage']
+
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -892,44 +918,29 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                                 arc_name = os.path.relpath(file_path, temp_dir)
                                 zip_file.write(file_path, arc_name)
 
-                await status_message.edit(content="☁️ Uploading to cloud...")
+                await status_message.edit(content="☁️ Uploading to Gofile...")
 
-                # Upload sur Gofile.io
-                async with aiohttp.ClientSession() as session:
-                    # 1. Obtenir le meilleur serveur
-                    async with session.get('https://api.gofile.io/getServer') as response:
-                        server_data = await response.json()
-                        if not server_data.get('status') == 'ok':
-                            raise Exception("Couldn't get Gofile.io server")
-                        
-                        server = server_data['data']['server']
-
-                    # 2. Upload le fichier
-                    form_data = aiohttp.FormData()
-                    form_data.add_field('file', open(zip_path, 'rb'))
+                try:
+                    download_link = await self.upload_to_gofile(zip_path)
                     
-                    async with session.post(f'https://{server}.gofile.io/uploadFile', data=form_data) as response:
-                        upload_data = await response.json()
-                        
-                        if not upload_data.get('status') == 'ok':
-                            raise Exception("Upload failed")
-                        
-                        download_link = upload_data['data']['downloadPage']
+                    # Créer l'embed avec le lien
+                    embed = discord.Embed(
+                        title="📥 Download Ready!",
+                        description=(
+                            f"[Click here to download all files]({download_link})\n\n"
+                            f"**Total files:** {len(files_to_download)}\n"
+                            f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
+                            f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
+                            "⚠️ *Note: Files are stored on Gofile.io*"
+                        ),
+                        color=0x00ff00
+                    )
+                    await status_message.delete()
+                    await thread.send(embed=embed)
 
-                # Créer l'embed avec le lien
-                embed = discord.Embed(
-                    title="📥 Download Ready!",
-                    description=(
-                        f"[Click here to download all files]({download_link})\n\n"
-                        f"**Total files:** {len(files_to_download)}\n"
-                        f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
-                        f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
-                        "⚠️ *Note: The link will expire after some time of inactivity*"
-                    ),
-                    color=0x00ff00
-                )
-                await status_message.delete()
-                await thread.send(embed=embed)
+                except Exception as e:
+                    await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+                    await self.send_error_log("download command", e)
 
             await interaction.followup.send(
                 f"✅ Download link ready! Check thread {thread.mention}",
