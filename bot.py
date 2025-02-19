@@ -938,12 +938,23 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                     await status_message.delete()
                     await thread.send(embed=embed)
 
-                except Exception as e:
-                    await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-                    await self.send_error_log("download command", e)
+                except Exception as upload_error:
+                    print(f"Upload error: {upload_error}")
+                    # Si l'upload échoue, envoyer le fichier directement sur Discord
+                    await status_message.edit(content="⚠️ Cloud upload failed, sending file directly...")
+                    
+                    if os.path.getsize(zip_path) < 25 * 1024 * 1024:  # Si moins de 25MB
+                        await thread.send(
+                            "📦 Here's your file:",
+                            file=discord.File(zip_path, filename=zip_name)
+                        )
+                    else:
+                        await thread.send("❌ File is too large to send directly through Discord. Please try with fewer files.")
+                    
+                    await status_message.delete()
 
             await interaction.followup.send(
-                f"✅ Download link ready! Check thread {thread.mention}",
+                f"✅ Download ready! Check thread {thread.mention}",
                 ephemeral=True
             )
 
@@ -1104,6 +1115,14 @@ Channel  : #{interaction.channel.name}```━━━━━━━━━━━━━
             await self.check_heartbeat()
         except Exception as e:
             print(f"Error in heartbeat: {e}")
+
+    async def send_error_log(self, command_name: str, error: Exception):
+        """Log les erreurs dans un canal dédié"""
+        print(f"Error in {command_name}: {str(error)}")
+        # Vous pouvez ajouter ici un log dans un canal Discord si vous le souhaitez
+
+def setup(bot):
+    bot.add_cog(DownloadCog(bot))
 
 # Fonction principale de démarrage
 async def main():
