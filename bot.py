@@ -17,6 +17,7 @@ import requests
 from dotenv import load_dotenv
 import aiofiles
 import zipfile
+from pathlib import Path
 
 # Configuration
 load_dotenv()
@@ -360,6 +361,9 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                         return data['data']['file']['url']['full']
                     else:
                         raise Exception(f"Upload failed: {data.get('error', 'Unknown error')}")
+        except Exception as e:
+            print(f"Upload error: {e}")
+            raise
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
