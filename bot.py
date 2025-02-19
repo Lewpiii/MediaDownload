@@ -338,75 +338,28 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
 
-    async def upload_to_gofile(self, file_path):
-        """Upload un fichier sur Gofile"""
+    async def upload_to_anonfiles(self, file_path):
+        """Upload un fichier sur anonfiles"""
         try:
-            print(f"Starting Gofile upload process for file: {file_path}")
-            print(f"File size: {os.path.getsize(file_path)} bytes")
-
+            print(f"Starting upload for file: {file_path}")
+            url = 'https://api.anonfiles.com/upload'
+            
             async with aiohttp.ClientSession() as session:
-                # 1. Obtenir le meilleur serveur
-                print("Getting Gofile server...")
-                server_url = 'https://api.gofile.io/getServer'
-                print(f"Requesting server from: {server_url}")
-                
-                async with session.get(server_url) as response:
-                    print(f"Server response status: {response.status}")
-                    if response.status != 200:
-                        response_text = await response.text()
-                        print(f"Server error response: {response_text}")
-                        raise Exception(f"Server request failed with status {response.status}")
-                    
-                    server_data = await response.json()
-                    print(f"Server response data: {server_data}")
-                    
-                    if server_data.get('status') != 'ok':
-                        raise Exception(f"Bad server response: {server_data}")
-                    
-                    server = server_data['data']['server']
-                    print(f"Got server: {server}")
-
-                # 2. Upload le fichier
-                upload_url = f'https://{server}.gofile.io/uploadFile'
-                print(f"Uploading to URL: {upload_url}")
-                
-                # Vérifier que le fichier existe et est accessible
-                if not os.path.exists(file_path):
-                    raise Exception(f"File not found: {file_path}")
-                
-                # Créer le form data
                 form_data = aiohttp.FormData()
                 form_data.add_field(
                     'file',
                     open(file_path, 'rb'),
-                    filename=os.path.basename(file_path),
-                    content_type='application/zip'
+                    filename=os.path.basename(file_path)
                 )
-
-                print("Starting file upload...")
-                async with session.post(upload_url, data=form_data) as response:
-                    print(f"Upload response status: {response.status}")
-                    if response.status != 200:
-                        response_text = await response.text()
-                        print(f"Upload error response: {response_text}")
-                        raise Exception(f"Upload failed with status {response.status}")
+                
+                async with session.post(url, data=form_data) as response:
+                    data = await response.json()
+                    print(f"Upload response: {data}")
                     
-                    upload_data = await response.json()
-                    print(f"Upload response data: {upload_data}")
-                    
-                    if upload_data.get('status') != 'ok':
-                        raise Exception(f"Upload failed: {upload_data}")
-                    
-                    download_link = upload_data['data']['downloadPage']
-                    print(f"Successfully got download link: {download_link}")
-                    return download_link
-                    
-        except Exception as e:
-            print(f"Detailed Gofile upload error: {str(e)}")
-            print(f"Error type: {type(e)}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
-            raise
+                    if data.get('status'):
+                        return data['data']['file']['url']['full']
+                    else:
+                        raise Exception(f"Upload failed: {data.get('error', 'Unknown error')}")
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
@@ -873,11 +826,9 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
         await interaction.response.defer(ephemeral=True, thinking=True)
         
         try:
-            # Collecter les fichiers
             files_to_download = []
             limit = None if number.value == 0 else number.value
             
-            # Informer l'utilisateur que la recherche est en cours
             await interaction.followup.send("🔍 Searching for files...", ephemeral=True)
             
             async for message in interaction.channel.history(limit=limit):
@@ -894,28 +845,18 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 await interaction.followup.send("❌ No files found!", ephemeral=True)
                 return
 
-            # Créer un thread pour le suivi
             thread = await interaction.channel.create_thread(
                 name=f"📥 Download all ({len(files_to_download)} files)",
                 auto_archive_duration=60
             )
 
-            # Informer l'utilisateur que le processus commence
-            await interaction.followup.send(
-                f"✅ Starting download process! Check thread {thread.mention}",
-                ephemeral=True
-            )
-
             status_message = await thread.send("🔄 Preparing your files...")
 
-            # Créer un dossier temporaire
             with tempfile.TemporaryDirectory() as temp_dir:
                 await status_message.edit(content="📥 Downloading files...")
                 
-                # Télécharger tous les fichiers
                 async with aiohttp.ClientSession() as session:
                     for idx, attachment in enumerate(files_to_download, 1):
-                        # Déterminer le dossier
                         if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
                             folder = os.path.join(temp_dir, "Images")
                         else:
@@ -927,14 +868,13 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                                 folder = os.path.join(temp_dir, "Videos/Minecraft")
                             elif "fortnite" in filename:
                                 folder = os.path.join(temp_dir, "Videos/Fortnite")
-                            elif "league" in filename or "lol" in filename:
+                            elif "league" in filename:
                                 folder = os.path.join(temp_dir, "Videos/League of Legends")
                             else:
                                 folder = os.path.join(temp_dir, "Videos/Other")
                         
                         os.makedirs(folder, exist_ok=True)
                         
-                        # Gérer les doublons
                         base_path = os.path.join(folder, attachment.filename)
                         final_path = base_path
                         counter = 1
@@ -944,21 +884,17 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                             final_path = f"{name}_{counter}{ext}"
                             counter += 1
 
-                        # Télécharger le fichier
                         async with session.get(attachment.url) as response:
                             if response.status == 200:
                                 content = await response.read()
                                 with open(final_path, 'wb') as f:
                                     f.write(content)
                         
-                        # Mettre à jour le statut
                         await status_message.edit(
                             content=f"📥 Downloading files... ({idx}/{len(files_to_download)})"
                         )
 
                 await status_message.edit(content="📦 Creating ZIP file...")
-
-                # Créer le ZIP
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_name = f"discord_media_{timestamp}.zip"
                 zip_path = os.path.join(temp_dir, zip_name)
@@ -971,67 +907,46 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                                 arc_name = os.path.relpath(file_path, temp_dir)
                                 zip_file.write(file_path, arc_name)
 
-                await status_message.edit(content="☁️ Uploading to Gofile...")
+                await status_message.edit(content="☁️ Uploading to cloud...")
 
                 try:
-                    for attempt in range(3):  # Essayer 3 fois
-                        try:
-                            download_link = await self.upload_to_gofile(zip_path)
-                            
-                            # Créer l'embed avec le lien
-                            embed = discord.Embed(
-                                title="📥 Download Ready!",
-                                description=(
-                                    f"[Click here to download all files]({download_link})\n\n"
-                                    f"**Total files:** {len(files_to_download)}\n"
-                                    f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
-                                    f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
-                                    "⚠️ *Note: Files are stored on Gofile.io*"
-                                ),
-                                color=0x00ff00
-                            )
-                            await status_message.delete()
-                            await thread.send(embed=embed)
-                            break
-                        except Exception as upload_error:
-                            if attempt < 2:  # Si ce n'est pas la dernière tentative
-                                await status_message.edit(content=f"☁️ Upload attempt {attempt + 1} failed, retrying...")
-                                await asyncio.sleep(2)  # Attendre un peu avant de réessayer
-                            else:
-                                raise upload_error
+                    download_link = await self.upload_to_anonfiles(zip_path)
+                    
+                    embed = discord.Embed(
+                        title="📥 Download Ready!",
+                        description=(
+                            f"[Click here to download all files]({download_link})\n\n"
+                            f"**Total files:** {len(files_to_download)}\n"
+                            f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
+                            f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
+                            "⚠️ *Note: Link will be available for several days*"
+                        ),
+                        color=0x00ff00
+                    )
+                    await status_message.delete()
+                    await thread.send(embed=embed)
 
                 except Exception as upload_error:
-                    print(f"All upload attempts failed: {upload_error}")
-                    # Si l'upload échoue après toutes les tentatives
-                    await status_message.edit(content="⚠️ Cloud upload failed, trying alternative method...")
-                    
-                    # Essayer d'envoyer directement sur Discord
-                    if os.path.getsize(zip_path) < 25 * 1024 * 1024:  # Si moins de 25MB
+                    print(f"Upload error: {upload_error}")
+                    if os.path.getsize(zip_path) < 25 * 1024 * 1024:
                         await thread.send(
-                            "📦 Here's your file:",
+                            "📦 Cloud upload failed, sending file directly:",
                             file=discord.File(zip_path, filename=zip_name)
                         )
                     else:
-                        # Si le fichier est trop gros, proposer des alternatives
-                        alternative_message = (
-                            "❌ File is too large to send directly.\n\n"
-                            "Suggestions:\n"
-                            "1. Try downloading fewer files at once\n"
-                            "2. Use `/download images` or `/download videos` separately\n"
-                            "3. Try with a smaller number of messages"
+                        await thread.send(
+                            "❌ File is too large to send directly. Please try with fewer files or contact an administrator."
                         )
-                        await thread.send(alternative_message)
-                    
                     await status_message.delete()
 
-                await interaction.followup.send(
-                    f"✅ Process complete! Check thread {thread.mention}",
-                    ephemeral=True
-                )
+            await interaction.followup.send(
+                f"✅ Download ready! Check thread {thread.mention}",
+                ephemeral=True
+            )
 
         except Exception as e:
+            print(f"Error: {e}")
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-            await self.send_error_log("download command", e)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
