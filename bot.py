@@ -15,9 +15,6 @@ import topgg
 from counters import download_count, successful_downloads, failed_downloads
 import requests
 from dotenv import load_dotenv
-import aiofiles
-import zipfile
-from pathlib import Path
 
 # Configuration
 load_dotenv()
@@ -39,12 +36,6 @@ try:
     LOGS_CHANNEL_ID = int(LOGS_CHANNEL_ID) if LOGS_CHANNEL_ID else None
 except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
-
-class MediaFile:
-    def __init__(self, filename, url, size):
-        self.filename = filename
-        self.url = url
-        self.size = size
 
 class MediaDownload(commands.Bot):
     """
@@ -116,9 +107,9 @@ class MediaDownload(commands.Bot):
                 
                 # Alterner le statut
                 if current_time.second % 10 < 5:
-                    status_text = f"/help for {len(self.users)} users"
+                    status_text = "🤖 Media Downloader"
                 else:
-                    status_text = f"/help for {len(self.guilds)} servers"
+                    status_text = f"📊 {len(self.guilds)} servers"
                     
                 activity = discord.Activity(
                     type=discord.ActivityType.watching, 
@@ -339,56 +330,6 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
 
-    async def upload_to_0x0(self, file_path):
-        """Upload un fichier sur 0x0.st"""
-        try:
-            print(f"Starting upload for file: {file_path}")
-            url = 'https://0x0.st'
-            
-            async with aiohttp.ClientSession() as session:
-                with open(file_path, 'rb') as f:
-                    form_data = aiohttp.FormData()
-                    form_data.add_field('file', f, filename=os.path.basename(file_path))
-                    
-                    async with session.post(url, data=form_data) as response:
-                        if response.status == 200:
-                            download_link = await response.text()
-                            download_link = download_link.strip()
-                            print(f"Upload successful, link: {download_link}")
-                            return download_link
-                        else:
-                            error_text = await response.text()
-                            raise Exception(f"Upload failed with status {response.status}: {error_text}")
-        except Exception as e:
-            print(f"Upload error: {e}")
-            raise
-
-    async def upload_to_anonfiles(self, file_path):
-        """Upload un fichier sur anonfiles"""
-        try:
-            print(f"Starting upload for file: {file_path}")
-            url = 'https://api.anonfiles.com/upload'
-            
-            async with aiohttp.ClientSession() as session:
-                form_data = aiohttp.FormData()
-                form_data.add_field(
-                    'file',
-                    open(file_path, 'rb'),
-                    filename=os.path.basename(file_path)
-                )
-                
-                async with session.post(url, data=form_data) as response:
-                    data = await response.json()
-                    print(f"Upload response: {data}")
-                    
-                    if data.get('status'):
-                        return data['data']['file']['url']['full']
-                    else:
-                        raise Exception(f"Upload failed: {data.get('error', 'Unknown error')}")
-        except Exception as e:
-            print(f"Upload error: {e}")
-            raise
-
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -418,52 +359,32 @@ class DownloadCog(commands.Cog):
             print(f"Erreur Top.gg: {e}")
             return False  # En cas d'erreur, on refuse l'accès
 
-    def _analyze_video_content(self, filename: str) -> str:
-        """Analyse le contenu de la vidéo avec l'IA pour déterminer sa catégorie"""
-        # Nettoyer le nom du fichier pour l'analyse
-        clean_name = filename.lower().replace('_', ' ').replace('-', ' ')
+    def _create_exe_wrapper(self, batch_content):
+        """Create an exe wrapper for the batch script"""
+        exe_script = f'''
+import os
+import sys
+import tempfile
+import subprocess
+
+def main():
+    # Créer un fichier batch temporaire
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
+        f.write("""{batch_content}""")
+        batch_path = f.name
+    
+    try:
+        # Exécuter le batch
+        subprocess.run([batch_path], shell=True)
+    finally:
+        # Nettoyer
+        os.unlink(batch_path)
+
+if __name__ == '__main__':
+    main()
+    '''
         
-        # Demander à Claude d'analyser le nom de la vidéo
-        analysis = f"""
-        Based on the video filename: "{clean_name}"
-        What is the main subject/game/content type? Consider:
-        - Game names (Minecraft, Valorant, etc.)
-        - Content types (Montage, Gameplay, Tutorial)
-        - Specific events (Tournament, Stream Highlights)
-        Return just the category name, creating a new one if needed.
-        """
-        
-        # Simuler la réponse de Claude (à remplacer par une vraie API IA plus tard)
-        if 'minecraft' in clean_name or 'mc' in clean_name:
-            return 'Minecraft'
-        elif 'valorant' in clean_name or 'valo' in clean_name:
-            return 'Valorant'
-        elif 'cs2' in clean_name or 'csgo' in clean_name:
-            return 'Counter-Strike'
-        elif 'lol' in clean_name or 'league' in clean_name:
-            return 'League of Legends'
-        elif 'montage' in clean_name:
-            return 'Montages'
-        elif 'tutorial' in clean_name or 'guide' in clean_name:
-            return 'Tutorials'
-        elif 'stream' in clean_name or 'live' in clean_name:
-            return 'Streams'
-        elif 'funny' in clean_name or 'fail' in clean_name:
-            return 'Funny Moments'
-        else:
-            # Analyse plus poussée du contexte
-            words = clean_name.split()
-            if any(word in words for word in ['kill', 'clutch', 'ace']):
-                return 'Highlights'
-            elif any(word in words for word in ['gameplay', 'play']):
-                return 'Gameplay'
-            
-            # Si aucune catégorie n'est détectée, créer une nouvelle basée sur les mots significatifs
-            significant_words = [w for w in words if len(w) > 3]
-            if significant_words:
-                return significant_words[0].title()
-            
-            return 'Other'
+        return exe_script
 
     def _create_batch_script(self, media_files):
         """Create Windows batch download script with automatic folder organization"""
@@ -496,53 +417,25 @@ echo.
 mkdir "!DOWNLOAD_DIR!" 2>nul
 cd /d "!DOWNLOAD_DIR!"
 
-mkdir "Images" 2>nul
-mkdir "Videos" 2>nul
-"""
+mkdir Images 2>nul && echo [+] Created Images folder
+mkdir Videos 2>nul && echo [+] Created Videos folder
+echo.
 
-        # Analyser d'abord toutes les vidéos et créer une liste des catégories nécessaires
-        video_categories = set()
-        video_mapping = {}  # Pour stocker la catégorie de chaque vidéo
-
-        # Vérifier l'extension du fichier pour déterminer le type
-        def is_video(filename):
-            video_extensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv']
-            return any(filename.lower().endswith(ext) for ext in video_extensions)
-
-        def is_image(filename):
-            image_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
-            return any(filename.lower().endswith(ext) for ext in image_extensions)
-
-        # Analyser et catégoriser les fichiers
-        for attachment in media_files.get('all', []):
-            filename = attachment.filename
-            if is_video(filename):
-                category = self._analyze_video_content(filename)
-                video_categories.add(category)
-                video_mapping[filename] = category
-
-        # Créer uniquement les dossiers nécessaires
-        for category in video_categories:
-            script += f'mkdir "Videos\\{category}" 2>nul\n'
-
-        script += """
 echo [+] Starting downloads...
 echo.
 """
         
         # Téléchargement des fichiers
-        for attachment in media_files.get('all', []):
-            filename = attachment.filename
-            safe_filename = filename.replace(" ", "_").replace('"', '')
-
-            if is_video(filename):
-                category = video_mapping[filename]
-                script += f'echo Downloading video: {safe_filename} to {category}\n'
-                script += f'curl.exe -L -o "Videos\\{category}\\{safe_filename}" "{attachment.url}"\n'
-            elif is_image(filename):
-                script += f'echo Downloading image: {safe_filename}\n'
-                script += f'curl.exe -L -o "Images\\{safe_filename}" "{attachment.url}"\n'
-
+        for media_type, attachments in media_files.items():
+            script += f'mkdir "{media_type}" 2>nul\n'
+            script += f'echo [+] Downloading {media_type}...\n'
+            
+            for attachment in attachments:
+                safe_filename = attachment.filename.replace(" ", "_").replace('"', '')
+                script += f'echo Downloading: {safe_filename}\n'
+                script += f'curl.exe -L -o "{media_type}\\{safe_filename}" "{attachment.url}"\n'
+            script += 'echo.\n'
+        
         script += """
 echo.
 echo ====================================
@@ -838,200 +731,161 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             )
             await self.bot.send_error_log("stats command", e)
 
-    @app_commands.command(name="download", description="Download media from this channel")
-    @app_commands.choices(type=[
-        app_commands.Choice(name="🖼️ Images", value="images"),
-        app_commands.Choice(name="🎥 Videos", value="videos"),
-        app_commands.Choice(name="📁 All", value="all")
-    ])
-    @app_commands.choices(number=[
-        app_commands.Choice(name="Last 10 messages", value=10),
-        app_commands.Choice(name="Last 20 messages", value=20),
-        app_commands.Choice(name="Last 50 messages", value=50),
-        app_commands.Choice(name="All messages", value=0)
-    ])
+    @app_commands.command(name="download", description="Download media files")
+    @app_commands.choices(
+        type=[
+            app_commands.Choice(name="📷 Images", value="images"),
+            app_commands.Choice(name="🎥 Videos", value="videos"),
+            app_commands.Choice(name="📁 All Files", value="all")
+        ],
+        number=[
+            app_commands.Choice(name="50 messages", value=50),
+            app_commands.Choice(name="100 messages", value=100),
+            app_commands.Choice(name="500 messages", value=500),
+            app_commands.Choice(name="1000 messages", value=1000),
+            app_commands.Choice(name="All messages", value=0)
+        ]
+    )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        
         try:
-            files_to_download = []
-            limit = None if number.value == 0 else number.value
-            
-            await interaction.followup.send("🔍 Searching for files...", ephemeral=True)
-            
-            async for message in interaction.channel.history(limit=limit):
-                for attachment in message.attachments:
-                    is_image = attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
-                    is_video = attachment.filename.lower().endswith(('.mp4', '.webm', '.mov'))
-                    
-                    if type.value == "all" or \
-                       (type.value == "images" and is_image) or \
-                       (type.value == "videos" and is_video):
-                        files_to_download.append(attachment)
+            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
+            status_message = await interaction.original_response()
 
-            if not files_to_download:
-                await interaction.followup.send("❌ No files found!", ephemeral=True)
-                return
-
-            thread = await interaction.channel.create_thread(
-                name=f"📥 Download all ({len(files_to_download)} files)",
-                auto_archive_duration=60
-            )
-
-            status_message = await thread.send("🔄 Preparing your files...")
-
-            with tempfile.TemporaryDirectory() as temp_dir:
-                await status_message.edit(content="📥 Downloading files...")
+            try:
+                # Vérifier si l'utilisateur a voté
+                has_voted = await self.check_vote(interaction.user.id)
                 
-                async with aiohttp.ClientSession() as session:
-                    for idx, attachment in enumerate(files_to_download, 1):
-                        if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-                            folder = os.path.join(temp_dir, "Images")
-                        else:
-                            folder = os.path.join(temp_dir, "Videos")
-                            filename = attachment.filename.lower()
-                            if "valorant" in filename:
-                                folder = os.path.join(temp_dir, "Videos/Valorant")
-                            elif "minecraft" in filename:
-                                folder = os.path.join(temp_dir, "Videos/Minecraft")
-                            elif "fortnite" in filename:
-                                folder = os.path.join(temp_dir, "Videos/Fortnite")
-                            elif "league" in filename:
-                                folder = os.path.join(temp_dir, "Videos/League of Legends")
-                            else:
-                                folder = os.path.join(temp_dir, "Videos/Other")
-                        
-                        os.makedirs(folder, exist_ok=True)
-                        
-                        base_path = os.path.join(folder, attachment.filename)
-                        final_path = base_path
-                        counter = 1
-                        
-                        while os.path.exists(final_path):
-                            name, ext = os.path.splitext(base_path)
-                            final_path = f"{name}_{counter}{ext}"
-                            counter += 1
+                # Si l'utilisateur n'a pas voté et demande plus de 50 messages ou tous les fichiers
+                if not has_voted and (number.value > 50 or type.value == "all"):
+                    embed = discord.Embed(
+                        title="⚠️ Vote Required",
+                        description=(
+                            "You need to vote for the bot to use this feature!\n\n"
+                            "📝 **Why vote?**\n"
+                            "• Support the bot\n"
+                            "• Get access to all features\n"
+                            "• Help us grow\n\n"
+                            "🔗 **Vote Link**\n"
+                            "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
+                            "✨ **Free Features**\n"
+                            "• Download up to 50 messages\n"
+                            "• Download specific media types\n"
+                        ),
+                        color=0xFF0000
+                    )
+                    embed.set_footer(text="Your vote lasts 12 hours!")
+                    await status_message.edit(embed=embed)
+                    return
 
-                        async with session.get(attachment.url) as response:
-                            if response.status == 200:
-                                content = await response.read()
-                                with open(final_path, 'wb') as f:
-                                    f.write(content)
+                # Paramètres de recherche
+                type_key = type.value
+                limit = None if number.value == 0 else number.value
+                
+                # Variables de suivi
+                media_files = {type_key: []}  # Initialisation avec le type de média comme clé
+                total_size = 0
+                processed_messages = 0
+                start_time = time.time()
+                
+                # Recherche des médias
+                async with interaction.channel.typing():
+                    async for message in interaction.channel.history(limit=limit):
+                        # Vérification du timeout (5 minutes)
+                        if time.time() - start_time > 300:
+                            await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
+                            return
+
+                        # Mise à jour du statut
+                        processed_messages += 1
+                        if processed_messages % 100 == 0:
+                            await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
                         
-                        await status_message.edit(
-                            content=f"📥 Downloading files... ({idx}/{len(files_to_download)})"
+                        # Analyse des pièces jointes
+                        for attachment in message.attachments:
+                            ext = os.path.splitext(attachment.filename.lower())[1]
+                            
+                            # Vérification du type de fichier
+                            valid = False
+                            if type_key == "images" and ext in self.bot.media_types['images']:
+                                valid = True
+                            elif type_key == "videos" and ext in self.bot.media_types['videos']:
+                                valid = True
+                            elif type_key == "all" and ext in self.bot.media_types['all']:
+                                valid = True
+
+                            if valid:
+                                if type_key not in media_files:
+                                    media_files[type_key] = []
+                                media_files[type_key].append(attachment)
+                                total_size += attachment.size
+
+                if not media_files:
+                    await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
+                    return
+
+                # Création du thread pour les téléchargements
+                thread = await interaction.channel.create_thread(
+                    name=f"📥 Download {type_key} ({sum(len(files) for files in media_files.values())} files)",
+                    type=discord.ChannelType.public_thread
+                )
+
+                # Message récapitulatif
+                summary = (
+                    "╔═══════════════════════════════════════════════╗\n"
+                    "              Media Download Ready               \n"
+                    "╚═══════════════════════════════════════════════╝\n\n"
+                    f"📊 **Files Found**\n"
+                    f"• Total Files: {sum(len(files) for files in media_files.values())}\n"
+                    f"• Messages Analyzed: {processed_messages}\n"
+                    f"• Total Size: {self._format_size(total_size)}\n\n"
+                    "📥 **Download Instructions**\n"
+                    "1. Download `MediaDownloader.bat`\n"
+                    "2. Double-click to run\n"
+                    "3. Choose download location\n"
+                    "4. Wait for completion\n\n"
+                    "🛡️ **Security Information**\n"
+                    "• Verified Safe Script\n"
+                    "• Auto-organizing Downloads\n"
+                    "• Smart Folder Structure\n"
+                )
+
+                # Création et envoi du script
+                batch_content = self._create_batch_script(media_files)
+
+                await thread.send(
+                    content=summary,
+                    files=[
+                        discord.File(
+                            io.StringIO(batch_content),
+                            filename="MediaDownloader.bat",
+                            description="Windows Download Script"
                         )
+                    ]
+                )
 
-                await status_message.edit(content="📦 Creating ZIP file...")
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                zip_name = f"discord_media_{timestamp}.zip"
-                zip_path = os.path.join(temp_dir, zip_name)
-                
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for root, _, files in os.walk(temp_dir):
-                        for file in files:
-                            if file != zip_name:
-                                file_path = os.path.join(root, file)
-                                arc_name = os.path.relpath(file_path, temp_dir)
-                                zip_file.write(file_path, arc_name)
+                # Mise à jour des compteurs
+                self.bot.download_count += 1
+                self.bot.successful_downloads += sum(len(files) for files in media_files.values())
+                self.bot.failed_downloads += 0
+                self.bot.downloads_by_type[type_key] += sum(len(files) for files in media_files.values())
+                self.bot.save_counters()
 
-                await status_message.edit(content="☁️ Uploading to cloud...")
-
+                # Message de confirmation
                 try:
-                    # Essayer d'abord 0x0.st
-                    try:
-                        download_link = await self.upload_to_0x0(zip_path)
-                        upload_success = True
-                    except Exception as e:
-                        print(f"0x0.st upload failed: {e}")
-                        # Si 0x0.st échoue, essayer anonfiles
-                        try:
-                            download_link = await self.upload_to_anonfiles(zip_path)
-                            upload_success = True
-                        except Exception as e2:
-                            print(f"Anonfiles upload failed: {e2}")
-                            upload_success = False
-                    
-                    if upload_success:
-                        embed = discord.Embed(
-                            title="📥 Download Ready!",
-                            description=(
-                                f"[Click here to download all files]({download_link})\n\n"
-                                f"**Total files:** {len(files_to_download)}\n"
-                                f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
-                                f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
-                                "⚠️ *Note: Please download the files soon as the link may expire*"
-                            ),
-                            color=0x00ff00
-                        )
-                        await status_message.delete()
-                        await thread.send(embed=embed)
-                    else:
-                        raise Exception("All upload methods failed")
+                    await status_message.edit(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.")
+                except discord.NotFound:
+                    await interaction.followup.send(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.", ephemeral=True)
 
-                except Exception as upload_error:
-                    print(f"All upload attempts failed: {upload_error}")
-                    # Si le fichier est trop gros, diviser en parties plus petites
-                    if os.path.getsize(zip_path) > 25 * 1024 * 1024:
-                        await status_message.edit(content="📦 File is large, splitting into parts...")
-                        
-                        # Créer un dossier pour les parties
-                        parts_dir = os.path.join(temp_dir, "parts")
-                        os.makedirs(parts_dir, exist_ok=True)
-                        
-                        # Diviser le ZIP en parties de 20MB
-                        part_size = 20 * 1024 * 1024  # 20MB
-                        with open(zip_path, 'rb') as f:
-                            part_num = 1
-                            while True:
-                                data = f.read(part_size)
-                                if not data:
-                                    break
-                                    
-                                part_path = os.path.join(parts_dir, f"{zip_name}.part{part_num}")
-                                with open(part_path, 'wb') as part_file:
-                                    part_file.write(data)
-                                part_num += 1
-                        
-                        # Uploader chaque partie
-                        embed = discord.Embed(
-                            title="📥 Download Parts",
-                            description="The file has been split into multiple parts due to size limitations:",
-                            color=0x00ff00
-                        )
-                        
-                        for i in range(1, part_num):
-                            part_path = os.path.join(parts_dir, f"{zip_name}.part{i}")
-                            try:
-                                part_link = await self.upload_to_0x0(part_path)
-                                embed.add_field(
-                                    name=f"Part {i}/{part_num-1}",
-                                    value=f"[Download Part {i}]({part_link})",
-                                    inline=False
-                                )
-                            except Exception as e:
-                                embed.add_field(
-                                    name=f"Part {i}/{part_num-1}",
-                                    value="❌ Upload failed for this part",
-                                    inline=False
-                                )
-                        
-                        await status_message.delete()
-                        await thread.send(embed=embed)
-                    else:
-                        await thread.send(
-                            "❌ All upload methods failed. Please try again later or contact an administrator."
-                        )
-                        await status_message.delete()
-
-            await interaction.followup.send(
-                f"✅ Process complete! Check thread {thread.mention}",
-                ephemeral=True
-            )
+            except discord.NotFound:
+                # Si l'interaction a expiré, on envoie un nouveau message
+                await interaction.followup.send("❌ The interaction has expired. Please try the command again.", ephemeral=True)
 
         except Exception as e:
-            print(f"Error: {e}")
-            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            try:
+                await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            except discord.NotFound:
+                print(f"Error in download_media and couldn't send followup: {e}")
+            await self.bot.send_error_log("download command", e)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
@@ -1186,14 +1040,6 @@ Channel  : #{interaction.channel.name}```━━━━━━━━━━━━━
             await self.check_heartbeat()
         except Exception as e:
             print(f"Error in heartbeat: {e}")
-
-    async def send_error_log(self, command_name: str, error: Exception):
-        """Log les erreurs dans un canal dédié"""
-        print(f"Error in {command_name}: {str(error)}")
-        # Vous pouvez ajouter ici un log dans un canal Discord si vous le souhaitez
-
-def setup(bot):
-    bot.add_cog(DownloadCog(bot))
 
 # Fonction principale de démarrage
 async def main():
