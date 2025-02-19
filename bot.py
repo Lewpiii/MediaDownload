@@ -339,6 +339,27 @@ Remaining Users  : {sum(g.member_count for g in self.guilds):,}```━━━━�
                 traceback=f"```py\n{error_traceback[:1000]}...```" if len(error_traceback) > 1000 else f"```py\n{error_traceback}```"
             )
 
+    async def upload_to_0x0(self, file_path):
+        """Upload un fichier sur 0x0.st"""
+        try:
+            print(f"Starting upload for file: {file_path}")
+            url = 'https://0x0.st'
+            
+            async with aiohttp.ClientSession() as session:
+                with open(file_path, 'rb') as f:
+                    form_data = aiohttp.FormData()
+                    form_data.add_field('file', f, filename=os.path.basename(file_path))
+                    
+                    async with session.post(url, data=form_data) as response:
+                        if response.status == 200:
+                            download_link = await response.text()
+                            download_link = download_link.strip()  # Enlever les espaces/newlines
+                            print(f"Upload successful, link: {download_link}")
+                            return download_link
+                        else:
+                            error_text = await response.text()
+                            raise Exception(f"Upload failed with status {response.status}: {error_text}")
+
     async def upload_to_anonfiles(self, file_path):
         """Upload un fichier sur anonfiles"""
         try:
@@ -914,37 +935,94 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 await status_message.edit(content="☁️ Uploading to cloud...")
 
                 try:
-                    download_link = await self.upload_to_anonfiles(zip_path)
+                    # Essayer d'abord 0x0.st
+                    try:
+                        download_link = await self.upload_to_0x0(zip_path)
+                        upload_success = True
+                    except Exception as e:
+                        print(f"0x0.st upload failed: {e}")
+                        # Si 0x0.st échoue, essayer anonfiles
+                        try:
+                            download_link = await self.upload_to_anonfiles(zip_path)
+                            upload_success = True
+                        except Exception as e2:
+                            print(f"Anonfiles upload failed: {e2}")
+                            upload_success = False
                     
-                    embed = discord.Embed(
-                        title="📥 Download Ready!",
-                        description=(
-                            f"[Click here to download all files]({download_link})\n\n"
-                            f"**Total files:** {len(files_to_download)}\n"
-                            f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
-                            f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
-                            "⚠️ *Note: Link will be available for several days*"
-                        ),
-                        color=0x00ff00
-                    )
-                    await status_message.delete()
-                    await thread.send(embed=embed)
+                    if upload_success:
+                        embed = discord.Embed(
+                            title="📥 Download Ready!",
+                            description=(
+                                f"[Click here to download all files]({download_link})\n\n"
+                                f"**Total files:** {len(files_to_download)}\n"
+                                f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
+                                f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
+                                "⚠️ *Note: Please download the files soon as the link may expire*"
+                            ),
+                            color=0x00ff00
+                        )
+                        await status_message.delete()
+                        await thread.send(embed=embed)
+                    else:
+                        raise Exception("All upload methods failed")
 
                 except Exception as upload_error:
-                    print(f"Upload error: {upload_error}")
-                    if os.path.getsize(zip_path) < 25 * 1024 * 1024:
-                        await thread.send(
-                            "📦 Cloud upload failed, sending file directly:",
-                            file=discord.File(zip_path, filename=zip_name)
+                    print(f"All upload attempts failed: {upload_error}")
+                    # Si le fichier est trop gros, diviser en parties plus petites
+                    if os.path.getsize(zip_path) > 25 * 1024 * 1024:
+                        await status_message.edit(content="📦 File is large, splitting into parts...")
+                        
+                        # Créer un dossier pour les parties
+                        parts_dir = os.path.join(temp_dir, "parts")
+                        os.makedirs(parts_dir, exist_ok=True)
+                        
+                        # Diviser le ZIP en parties de 20MB
+                        part_size = 20 * 1024 * 1024  # 20MB
+                        with open(zip_path, 'rb') as f:
+                            part_num = 1
+                            while True:
+                                data = f.read(part_size)
+                                if not data:
+                                    break
+                                    
+                                part_path = os.path.join(parts_dir, f"{zip_name}.part{part_num}")
+                                with open(part_path, 'wb') as part_file:
+                                    part_file.write(data)
+                                part_num += 1
+                        
+                        # Uploader chaque partie
+                        embed = discord.Embed(
+                            title="📥 Download Parts",
+                            description="The file has been split into multiple parts due to size limitations:",
+                            color=0x00ff00
                         )
+                        
+                        for i in range(1, part_num):
+                            part_path = os.path.join(parts_dir, f"{zip_name}.part{i}")
+                            try:
+                                part_link = await self.upload_to_0x0(part_path)
+                                embed.add_field(
+                                    name=f"Part {i}/{part_num-1}",
+                                    value=f"[Download Part {i}]({part_link})",
+                                    inline=False
+                                )
+                            except Exception as e:
+                                embed.add_field(
+                                    name=f"Part {i}/{part_num-1}",
+                                    value="❌ Upload failed for this part",
+                                    inline=False
+                                )
+                        
+                        await status_message.delete()
+                        await thread.send(embed=embed)
                     else:
                         await thread.send(
-                            "❌ File is too large to send directly. Please try with fewer files or contact an administrator."
+                            "❌ All upload methods failed. Please try again later or contact an administrator."
                         )
-                    await status_message.delete()
+                        await status_message.delete()
 
             await interaction.followup.send(
-                f"✅ Download ready! Check thread {thread.mention}",
+                f"✅ Process complete! Check thread {thread.mention}",
                 ephemeral=True
             )
 
