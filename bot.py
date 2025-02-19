@@ -826,12 +826,16 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
         app_commands.Choice(name="All messages", value=0)
     ])
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
+        # Répondre immédiatement à Discord
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        
         try:
-            await interaction.response.defer(ephemeral=True)
-            
             # Collecter les fichiers
             files_to_download = []
             limit = None if number.value == 0 else number.value
+            
+            # Informer l'utilisateur que la recherche est en cours
+            await interaction.followup.send("🔍 Searching for files...", ephemeral=True)
             
             async for message in interaction.channel.history(limit=limit):
                 for attachment in message.attachments:
@@ -851,6 +855,12 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             thread = await interaction.channel.create_thread(
                 name=f"📥 Download all ({len(files_to_download)} files)",
                 auto_archive_duration=60
+            )
+
+            # Informer l'utilisateur que le processus commence
+            await interaction.followup.send(
+                f"✅ Starting download process! Check thread {thread.mention}",
+                ephemeral=True
             )
 
             status_message = await thread.send("🔄 Preparing your files...")
