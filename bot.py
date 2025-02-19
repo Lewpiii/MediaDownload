@@ -37,6 +37,12 @@ try:
 except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
 
+class MediaFile:
+    def __init__(self, filename, url, size):
+        self.filename = filename
+        self.url = url
+        self.size = size
+
 class MediaDownload(commands.Bot):
     """
     Bot principal pour le téléchargement de médias Discord
@@ -779,129 +785,73 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             )
             await self.bot.send_error_log("stats command", e)
 
-    @app_commands.command(name="download", description="Download media files")
-    @app_commands.choices(
-        type=[
-            app_commands.Choice(name="📷 Images", value="images"),
-            app_commands.Choice(name="🎥 Videos", value="videos"),
-            app_commands.Choice(name="📁 All Files", value="all")
-        ],
-        number=[
-            app_commands.Choice(name="50 messages", value=50),
-            app_commands.Choice(name="100 messages", value=100),
-            app_commands.Choice(name="500 messages", value=500),
-            app_commands.Choice(name="1000 messages", value=1000),
-            app_commands.Choice(name="All messages", value=0)
-        ]
-    )
+    @app_commands.command(name="download", description="Download media from this channel")
+    @app_commands.choices(type=[
+        app_commands.Choice(name="🖼️ Images", value="images"),
+        app_commands.Choice(name="🎥 Videos", value="videos"),
+        app_commands.Choice(name="📁 All", value="all")
+    ])
+    @app_commands.choices(number=[
+        app_commands.Choice(name="Last 10 messages", value=10),
+        app_commands.Choice(name="Last 20 messages", value=20),
+        app_commands.Choice(name="Last 50 messages", value=50),
+        app_commands.Choice(name="All messages", value=0)
+    ])
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
         try:
-            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
-            status_message = await interaction.original_response()
-
-            try:
-                # Vérifier si l'utilisateur a voté
-                has_voted = await self.check_vote(interaction.user.id)
+            await interaction.response.defer(ephemeral=True)
+            
+            # Collecter les fichiers
+            files_to_download = []
+            messages = []
+            
+            # Définir la limite de messages
+            limit = None if number.value == 0 else number.value
+            
+            # Récupérer les messages
+            async for message in interaction.channel.history(limit=limit):
+                messages.append(message)
                 
-                # Si l'utilisateur n'a pas voté et demande plus de 50 messages ou tous les fichiers
-                if not has_voted and (number.value > 50 or type.value == "all"):
-                    embed = discord.Embed(
-                        title="⚠️ Vote Required",
-                        description=(
-                            "You need to vote for the bot to use this feature!\n\n"
-                            "📝 **Why vote?**\n"
-                            "• Support the bot\n"
-                            "• Get access to all features\n"
-                            "• Help us grow\n\n"
-                            "🔗 **Vote Link**\n"
-                            "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
-                            "✨ **Free Features**\n"
-                            "• Download up to 50 messages\n"
-                            "• Download specific media types\n"
-                        ),
-                        color=0xFF0000
-                    )
-                    embed.set_footer(text="Your vote lasts 12 hours!")
-                    await status_message.edit(embed=embed)
-                    return
+                for attachment in message.attachments:
+                    # Vérifier le type de fichier
+                    is_image = attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+                    is_video = attachment.filename.lower().endswith(('.mp4', '.webm', '.mov'))
+                    
+                    if type.value == "all" or \
+                       (type.value == "images" and is_image) or \
+                       (type.value == "videos" and is_video):
+                        files_to_download.append(
+                            MediaFile(
+                                filename=attachment.filename,
+                                url=attachment.url,
+                                size=attachment.size
+                            )
+                        )
 
-                # Paramètres de recherche
-                type_key = type.value
-                limit = None if number.value == 0 else number.value
-                
-                # Variables de suivi
-                media_files = []
-                total_size = 0
-                processed_messages = 0
-                start_time = time.time()
-                
-                # Recherche des médias
-                async with interaction.channel.typing():
-                    async for message in interaction.channel.history(limit=limit):
-                        # Vérification du timeout (5 minutes)
-                        if time.time() - start_time > 300:
-                            await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
-                            return
+            if not files_to_download:
+                await interaction.followup.send("❌ No files found!", ephemeral=True)
+                return
 
-                        # Mise à jour du statut
-                        processed_messages += 1
-                        if processed_messages % 100 == 0:
-                            await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
-                        
-                        # Analyse des pièces jointes
-                        for attachment in message.attachments:
-                            ext = os.path.splitext(attachment.filename.lower())[1]
-                            
-                            # Vérification du type de fichier
-                            valid = False
-                            if type_key == "images" and ext in self.bot.media_types['images']:
-                                valid = True
-                            elif type_key == "videos" and ext in self.bot.media_types['videos']:
-                                valid = True
-                            elif type_key == "all" and ext in self.bot.media_types['all']:
-                                valid = True
+            # Create thread for download
+            thread = await interaction.channel.create_thread(
+                name=f"📥 Download all ({len(files_to_download)} files)",
+                auto_archive_duration=60
+            )
 
-                            if valid:
-                                media_files.append(attachment)
-                                total_size += attachment.size
+            await thread.send(f"🔍 Found {len(files_to_download)} files to download!")
 
-                if not media_files:
-                    await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
-                    return
+            # Launch download window
+            from downloader_gui import show_downloader
+            show_downloader(files_to_download)
 
-                # Traitement des fichiers à télécharger
-                if isinstance(interaction.channel, discord.TextChannel):
-                    # Créer un thread si nous sommes dans un canal de serveur
-                    thread = await interaction.channel.create_thread(
-                        name=f"📥 Download {type.value} ({len(media_files)} files)",
-                        type=discord.ChannelType.public_thread
-                    )
-                else:
-                    # Si c'est un DM, utilisez simplement le canal de DM
-                    thread = interaction.channel
-
-                # Téléchargez les fichiers comme d'habitude
-                for attachment in media_files:
-                    response = requests.get(attachment.url)
-                    if response.status_code == 200:
-                        # Enregistrez le fichier ou traitez-le comme nécessaire
-                        with open(f"{attachment.filename}", 'wb') as f:
-                            f.write(response.content)
-                        self.bot.successful_downloads += 1
-                    else:
-                        self.bot.failed_downloads += 1
-
-                # Envoyer un message de confirmation dans le thread ou le canal DM
-                await thread.send(f"✅ Download complete! {len(media_files)} files downloaded.")
-
-            except discord.NotFound:
-                # Si l'interaction a expiré, on envoie un nouveau message
-                await interaction.followup.send("❌ The interaction has expired. Please try the command again.", ephemeral=True)
+            await interaction.followup.send(
+                f"✅ Download started! Check thread {thread.mention}",
+                ephemeral=True
+            )
 
         except Exception as e:
-            print(f"Error in download_media: {e}")
-            self.bot.failed_downloads += 1  # Incrémenter le compteur d'échecs
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            await self.bot.send_error_log("download command", e)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
