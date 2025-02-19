@@ -827,52 +827,112 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 auto_archive_duration=60
             )
 
-            await thread.send("🔄 Preparing your download...")
+            status_message = await thread.send("🔄 Preparing your files...")
 
-            # Créer un fichier ZIP en mémoire
-            zip_buffer = io.BytesIO()
-            
-            # Organiser les fichiers dans le ZIP
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Créer un dossier temporaire
+            with tempfile.TemporaryDirectory() as temp_dir:
+                await status_message.edit(content="📥 Downloading files...")
+                
+                # Télécharger tous les fichiers
                 async with aiohttp.ClientSession() as session:
-                    for attachment in files_to_download:
-                        # Déterminer le dossier de destination
+                    for idx, attachment in enumerate(files_to_download, 1):
+                        # Déterminer le dossier
                         if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-                            folder = "Images"
+                            folder = os.path.join(temp_dir, "Images")
                         else:
-                            folder = "Videos"
-                            # Sous-dossiers pour les vidéos
+                            folder = os.path.join(temp_dir, "Videos")
                             filename = attachment.filename.lower()
                             if "valorant" in filename:
-                                folder = "Videos/Valorant"
+                                folder = os.path.join(temp_dir, "Videos/Valorant")
                             elif "minecraft" in filename:
-                                folder = "Videos/Minecraft"
+                                folder = os.path.join(temp_dir, "Videos/Minecraft")
                             elif "fortnite" in filename:
-                                folder = "Videos/Fortnite"
+                                folder = os.path.join(temp_dir, "Videos/Fortnite")
                             elif "league" in filename or "lol" in filename:
-                                folder = "Videos/League of Legends"
+                                folder = os.path.join(temp_dir, "Videos/League of Legends")
                             else:
-                                folder = "Videos/Other"
+                                folder = os.path.join(temp_dir, "Videos/Other")
+                        
+                        os.makedirs(folder, exist_ok=True)
+                        
+                        # Gérer les doublons
+                        base_path = os.path.join(folder, attachment.filename)
+                        final_path = base_path
+                        counter = 1
+                        
+                        while os.path.exists(final_path):
+                            name, ext = os.path.splitext(base_path)
+                            final_path = f"{name}_{counter}{ext}"
+                            counter += 1
 
-                        # Télécharger et ajouter au ZIP
+                        # Télécharger le fichier
                         async with session.get(attachment.url) as response:
                             if response.status == 200:
                                 content = await response.read()
-                                zip_file.writestr(f"{folder}/{attachment.filename}", content)
+                                with open(final_path, 'wb') as f:
+                                    f.write(content)
+                        
+                        # Mettre à jour le statut
+                        await status_message.edit(
+                            content=f"📥 Downloading files... ({idx}/{len(files_to_download)})"
+                        )
 
-            # Préparer le ZIP pour l'envoi
-            zip_buffer.seek(0)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            zip_filename = f"discord_media_{timestamp}.zip"
+                await status_message.edit(content="📦 Creating ZIP file...")
 
-            # Envoyer le fichier ZIP
-            await thread.send(
-                "✅ Your download is ready!",
-                file=discord.File(fp=zip_buffer, filename=zip_filename)
-            )
+                # Créer le ZIP
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                zip_name = f"discord_media_{timestamp}.zip"
+                zip_path = os.path.join(temp_dir, zip_name)
+                
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for root, _, files in os.walk(temp_dir):
+                        for file in files:
+                            if file != zip_name:
+                                file_path = os.path.join(root, file)
+                                arc_name = os.path.relpath(file_path, temp_dir)
+                                zip_file.write(file_path, arc_name)
+
+                await status_message.edit(content="☁️ Uploading to cloud...")
+
+                # Upload sur Gofile.io
+                async with aiohttp.ClientSession() as session:
+                    # 1. Obtenir le meilleur serveur
+                    async with session.get('https://api.gofile.io/getServer') as response:
+                        server_data = await response.json()
+                        if not server_data.get('status') == 'ok':
+                            raise Exception("Couldn't get Gofile.io server")
+                        
+                        server = server_data['data']['server']
+
+                    # 2. Upload le fichier
+                    form_data = aiohttp.FormData()
+                    form_data.add_field('file', open(zip_path, 'rb'))
+                    
+                    async with session.post(f'https://{server}.gofile.io/uploadFile', data=form_data) as response:
+                        upload_data = await response.json()
+                        
+                        if not upload_data.get('status') == 'ok':
+                            raise Exception("Upload failed")
+                        
+                        download_link = upload_data['data']['downloadPage']
+
+                # Créer l'embed avec le lien
+                embed = discord.Embed(
+                    title="📥 Download Ready!",
+                    description=(
+                        f"[Click here to download all files]({download_link})\n\n"
+                        f"**Total files:** {len(files_to_download)}\n"
+                        f"**Images:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')))}\n"
+                        f"**Videos:** {sum(1 for f in files_to_download if f.filename.lower().endswith(('.mp4', '.webm', '.mov')))}\n\n"
+                        "⚠️ *Note: The link will expire after some time of inactivity*"
+                    ),
+                    color=0x00ff00
+                )
+                await status_message.delete()
+                await thread.send(embed=embed)
 
             await interaction.followup.send(
-                f"✅ Download ready! Check thread {thread.mention}",
+                f"✅ Download link ready! Check thread {thread.mention}",
                 ephemeral=True
             )
 
