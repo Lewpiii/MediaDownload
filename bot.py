@@ -15,6 +15,8 @@ import topgg
 from counters import download_count, successful_downloads, failed_downloads
 import requests
 from dotenv import load_dotenv
+import aiofiles
+import zipfile
 
 # Configuration
 load_dotenv()
@@ -807,7 +809,6 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
             
             async for message in interaction.channel.history(limit=limit):
                 for attachment in message.attachments:
-                    # Vérifier le type de fichier
                     is_image = attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
                     is_video = attachment.filename.lower().endswith(('.mp4', '.webm', '.mov'))
                     
@@ -826,50 +827,54 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 auto_archive_duration=60
             )
 
-            # Vérifier si on est sur le serveur
-            is_server = os.environ.get('IS_SERVER', True)  # Par défaut True pour Render
+            await thread.send("🔄 Preparing your download...")
+
+            # Créer un fichier ZIP en mémoire
+            zip_buffer = io.BytesIO()
             
-            if is_server:
-                # Version serveur : envoyer les liens de téléchargement
-                chunks = []
-                current_chunk = []
-                current_length = 0
-                
-                for file in files_to_download:
-                    file_line = f"• [{file.filename}]({file.url})"
-                    if current_length + len(file_line) > 3800:  # Discord limit
-                        chunks.append(current_chunk)
-                        current_chunk = []
-                        current_length = 0
-                    current_chunk.append(file_line)
-                    current_length += len(file_line)
-                
-                if current_chunk:
-                    chunks.append(current_chunk)
-                
-                # Envoyer les embeds avec les liens
-                for i, chunk in enumerate(chunks):
-                    embed = discord.Embed(
-                        title=f"📥 Download Links (Part {i+1}/{len(chunks)})",
-                        description="\n".join(chunk),
-                        color=0x5865F2
-                    )
-                    await thread.send(embed=embed)
-                
-                await interaction.followup.send(
-                    f"✅ Download links ready! Check thread {thread.mention}",
-                    ephemeral=True
-                )
-                
-            else:
-                # Version locale : utiliser l'interface graphique
-                from downloader_gui import show_downloader
-                show_downloader(files_to_download)
-                
-                await interaction.followup.send(
-                    f"✅ Download started! Check thread {thread.mention}",
-                    ephemeral=True
-                )
+            # Organiser les fichiers dans le ZIP
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                async with aiohttp.ClientSession() as session:
+                    for attachment in files_to_download:
+                        # Déterminer le dossier de destination
+                        if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                            folder = "Images"
+                        else:
+                            folder = "Videos"
+                            # Sous-dossiers pour les vidéos
+                            filename = attachment.filename.lower()
+                            if "valorant" in filename:
+                                folder = "Videos/Valorant"
+                            elif "minecraft" in filename:
+                                folder = "Videos/Minecraft"
+                            elif "fortnite" in filename:
+                                folder = "Videos/Fortnite"
+                            elif "league" in filename or "lol" in filename:
+                                folder = "Videos/League of Legends"
+                            else:
+                                folder = "Videos/Other"
+
+                        # Télécharger et ajouter au ZIP
+                        async with session.get(attachment.url) as response:
+                            if response.status == 200:
+                                content = await response.read()
+                                zip_file.writestr(f"{folder}/{attachment.filename}", content)
+
+            # Préparer le ZIP pour l'envoi
+            zip_buffer.seek(0)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            zip_filename = f"discord_media_{timestamp}.zip"
+
+            # Envoyer le fichier ZIP
+            await thread.send(
+                "✅ Your download is ready!",
+                file=discord.File(fp=zip_buffer, filename=zip_filename)
+            )
+
+            await interaction.followup.send(
+                f"✅ Download ready! Check thread {thread.mention}",
+                ephemeral=True
+            )
 
         except Exception as e:
             await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
