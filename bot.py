@@ -827,7 +827,6 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 thread = await interaction.channel.create_thread(
                     name=f"📥 Download {type_key} ({sum(len(files) for files in media_files.values())} files)",
                     type=discord.ChannelType.public_thread,
-                    message=status_message  # Associate thread with the status message
                 )
 
                 # Message récapitulatif
@@ -853,16 +852,7 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 # Création et envoi du script
                 batch_content = self._create_batch_script(media_files)
 
-                await thread.send(
-                    content=summary,
-                    files=[
-                        discord.File(
-                            io.StringIO(batch_content),
-                            filename="MediaDownloader.bat",
-                            description="Windows Download Script"
-                        )
-                    ]
-                )
+                await thread.send(summary)
 
                 # Mise à jour des compteurs
                 self.bot.download_count += 1
