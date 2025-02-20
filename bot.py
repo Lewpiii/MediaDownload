@@ -169,10 +169,13 @@ class MediaDownload(commands.Bot):
 
     def save_counters(self):
         """Sauvegarde les compteurs dans un fichier Python"""
-        with open('counters.py', 'w') as f:
-            f.write(f"download_count = {self.download_count}\n")
-            f.write(f"successful_downloads = {self.successful_downloads}\n")
-            f.write(f"failed_downloads = {self.failed_downloads}\n")
+        try:
+            with open('counters.py', 'w') as f:
+                f.write(f"download_count = {self.download_count}\n")
+                f.write(f"successful_downloads = {self.successful_downloads}\n")
+                f.write(f"failed_downloads = {self.failed_downloads}\n")
+        except Exception as e:
+            print(f"Error saving counters: {e}")
 
     async def on_ready(self):
         """Bot startup logging with consistent styling"""
@@ -676,6 +679,12 @@ Download last 200 videos
             total_channels = sum(len(g.channels) for g in self.bot.guilds)
             uptime = datetime.now() - self.bot.start_time
             
+            # Calcul du taux de réussite avec limite à 100%
+            success_rate = min(
+                (self.bot.successful_downloads / self.bot.download_count * 100) if self.bot.download_count > 0 else 0,
+                100  # Limite maximum à 100%
+            )
+            
             embed = discord.Embed(
                 title="📊 Bot Statistics",
                 description="System information and statistics\n━━━━━━━━━━━━━━━━━━━━━━",
@@ -697,12 +706,11 @@ Latency    : {round(self.bot.latency * 1000)}ms```━━━━━━━━━━
             )
             
             # Statistiques de téléchargement
-            success_rate = f"{(self.bot.successful_downloads / self.bot.download_count * 100):.1f}%" if self.bot.download_count > 0 else "N/A"
             download_stats = f"""```yml
 Total Downloads : {self.bot.download_count:,}
 Successful     : {self.bot.successful_downloads:,}
 Failed         : {self.bot.failed_downloads:,}
-Success Rate   : {success_rate}```━━━━━━━━━━━━━━━━"""
+Success Rate   : {success_rate:.1f}%```━━━━━━━━━━━━━━━━"""
             
             embed.add_field(
                 name="📥 Download Statistics",
@@ -869,12 +877,12 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
                 # Nettoyer le fichier temporaire
                 os.unlink(batch_path)
 
-                # Mise à jour des compteurs
+                # Mise à jour des compteurs et sauvegarde immédiate
                 self.bot.download_count += 1
                 self.bot.successful_downloads += sum(len(files) for files in media_files.values())
                 self.bot.failed_downloads += 0
                 self.bot.downloads_by_type[type_key] += sum(len(files) for files in media_files.values())
-                self.bot.save_counters()
+                self.bot.save_counters()  # Sauvegarde après chaque mise à jour
 
                 # Message de confirmation
                 try:
