@@ -105,11 +105,12 @@ class MediaDownload(commands.Bot):
             try:
                 current_time = datetime.now()
                 
-                # Alterner le statut
-                if current_time.second % 10 < 5:
-                    status_text = "🤖 Media Downloader"
+                # Alterner le statut toutes les minutes
+                if current_time.minute % 2 == 0:
+                    status_text = f"/help for {len(self.guilds)} servers"
                 else:
-                    status_text = f"📊 {len(self.guilds)} servers"
+                    total_users = sum(g.member_count for g in self.guilds)
+                    status_text = f"/help for {total_users:,} users"
                     
                 activity = discord.Activity(
                     type=discord.ActivityType.watching, 
