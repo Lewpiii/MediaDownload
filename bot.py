@@ -851,8 +851,23 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
 
                 # Création et envoi du script
                 batch_content = self._create_batch_script(media_files)
+                
+                # Créer un fichier temporaire pour le script batch
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
+                    f.write(batch_content)
+                    batch_path = f.name
 
-                await thread.send(summary)
+                # Envoyer le fichier dans le thread
+                await thread.send(
+                    summary,
+                    file=discord.File(
+                        batch_path,
+                        filename='MediaDownloader.bat'
+                    )
+                )
+
+                # Nettoyer le fichier temporaire
+                os.unlink(batch_path)
 
                 # Mise à jour des compteurs
                 self.bot.download_count += 1
