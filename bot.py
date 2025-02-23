@@ -358,16 +358,21 @@ class DownloadCog(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 headers = {"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEzMzI2ODQ4Nzc1NTE3NjM1MjkiLCJib3QiOnRydWUsImlhdCI6MTcwNjYyNDc5OH0.q_nKN0O4DoF9HhEj_vO_4DGBFGrL6_lbh0Y0aJvodYY"}
-                async with session.get(
-                    f"https://top.gg/api/bots/1332684877551763529/check?userId={user_id}",
-                    headers=headers
-                ) as response:
+                url = f"https://top.gg/api/bots/1332684877551763529/check?userId={user_id}"
+                
+                print(f"Checking vote for user {user_id}")  # Debug log
+                async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data.get("voted") == 1
-                    return False
+                        has_voted = bool(data.get("voted", 0))
+                        print(f"Vote response: {data}, Has voted: {has_voted}")  # Debug log
+                        return has_voted
+                    else:
+                        error_text = await response.text()
+                        print(f"API Error: Status {response.status}, Response: {error_text}")  # Debug log
+                        return False
         except Exception as e:
-            print(f"Erreur lors de la vérification du vote: {e}")
+            print(f"Vote check error: {str(e)}")  # Debug log
             return False
 
     def _create_exe_wrapper(self, batch_content):
