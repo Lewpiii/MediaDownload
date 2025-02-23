@@ -97,7 +97,7 @@ class MediaDownloadBot(commands.Bot):
         try:
             if self.status_index == 0:
                 activity = discord.Activity(
-                    type=discord.ActivityType.WATCHING,  # En majuscules
+                    type=discord.ActivityType.watching,  # En minuscules
                     name=f"/help | {len(self.guilds)} servers"
                 )
                 await self.change_presence(
@@ -107,7 +107,7 @@ class MediaDownloadBot(commands.Bot):
             else:
                 total_users = sum(g.member_count for g in self.guilds)
                 activity = discord.Activity(
-                    type=discord.ActivityType.WATCHING,  # En majuscules
+                    type=discord.ActivityType.watching,  # En minuscules
                     name=f"/help | {total_users} users"
                 )
                 await self.change_presence(
@@ -135,7 +135,7 @@ class MediaDownloadBot(commands.Bot):
 
         # Définir le statut initial
         activity = discord.Activity(
-            type=discord.ActivityType.WATCHING,
+            type=discord.ActivityType.watching,  # En minuscules
             name=f"/help | {len(self.guilds)} servers"
         )
         await self.change_presence(
