@@ -763,151 +763,143 @@ All    : {self.bot.downloads_by_type['all']:,}```━━━━━━━━━━�
         ]
     )
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
+        # Ne pas envoyer de message initial
+        await interaction.response.defer(ephemeral=True)
+        
         try:
-            await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
-            status_message = await interaction.original_response()
+            # Vérifier si l'utilisateur a voté
+            has_voted = await self.check_vote(interaction.user.id)
+            
+            # Si l'utilisateur n'a pas voté et demande plus de 50 messages ou tous les fichiers
+            if not has_voted and (number.value > 50 or type.value == "all"):
+                embed = discord.Embed(
+                    title="⚠️ Vote Required",
+                    description=(
+                        "You need to vote for the bot to use this feature!\n\n"
+                        "📝 **Why vote?**\n"
+                        "• Support the bot\n"
+                        "• Get access to all features\n"
+                        "• Help us grow\n\n"
+                        "🔗 **Vote Link**\n"
+                        "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
+                        "✨ **Free Features**\n"
+                        "• Download up to 50 messages\n"
+                        "• Download specific media types\n"
+                    ),
+                    color=0xFF0000
+                )
+                embed.set_footer(text="Your vote lasts 12 hours!")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
 
-            try:
-                # Vérifier si l'utilisateur a voté
-                has_voted = await self.check_vote(interaction.user.id)
-                
-                # Si l'utilisateur n'a pas voté et demande plus de 50 messages ou tous les fichiers
-                if not has_voted and (number.value > 50 or type.value == "all"):
-                    embed = discord.Embed(
-                        title="⚠️ Vote Required",
-                        description=(
-                            "You need to vote for the bot to use this feature!\n\n"
-                            "📝 **Why vote?**\n"
-                            "• Support the bot\n"
-                            "• Get access to all features\n"
-                            "• Help us grow\n\n"
-                            "🔗 **Vote Link**\n"
-                            "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
-                            "✨ **Free Features**\n"
-                            "• Download up to 50 messages\n"
-                            "• Download specific media types\n"
-                        ),
-                        color=0xFF0000
-                    )
-                    embed.set_footer(text="Your vote lasts 12 hours!")
-                    await status_message.edit(embed=embed)
-                    return
+            # Si l'utilisateur a voté ou demande une fonctionnalité gratuite
+            await interaction.followup.send("🔍 Searching for media...", ephemeral=True)
+            
+            # Paramètres de recherche
+            type_key = type.value
+            limit = None if number.value == 0 else number.value
+            
+            # Variables de suivi
+            media_files = {type_key: []}  # Initialisation avec le type de média comme clé
+            total_size = 0
+            processed_messages = 0
+            start_time = time.time()
+            
+            # Recherche des médias
+            async with interaction.channel.typing():
+                async for message in interaction.channel.history(limit=limit):
+                    # Vérification du timeout (5 minutes)
+                    if time.time() - start_time > 300:
+                        await interaction.followup.send(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.", ephemeral=True)
+                        return
 
-                # Paramètres de recherche
-                type_key = type.value
-                limit = None if number.value == 0 else number.value
-                
-                # Variables de suivi
-                media_files = {type_key: []}  # Initialisation avec le type de média comme clé
-                total_size = 0
-                processed_messages = 0
-                start_time = time.time()
-                
-                # Recherche des médias
-                async with interaction.channel.typing():
-                    async for message in interaction.channel.history(limit=limit):
-                        # Vérification du timeout (5 minutes)
-                        if time.time() - start_time > 300:
-                            await status_message.edit(content="⚠️ La recherche a pris trop de temps. Essayez avec un nombre plus petit de messages.")
-                            return
-
-                        # Mise à jour du statut
-                        processed_messages += 1
-                        if processed_messages % 100 == 0:
-                            await status_message.edit(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
+                    # Mise à jour du statut
+                    processed_messages += 1
+                    if processed_messages % 100 == 0:
+                        await interaction.followup.send(content=f"🔍 Recherche en cours... ({processed_messages} messages analysés)")
+                    
+                    # Analyse des pièces jointes
+                    for attachment in message.attachments:
+                        ext = os.path.splitext(attachment.filename.lower())[1]
                         
-                        # Analyse des pièces jointes
-                        for attachment in message.attachments:
-                            ext = os.path.splitext(attachment.filename.lower())[1]
-                            
-                            # Vérification du type de fichier
-                            valid = False
-                            if type_key == "images" and ext in self.bot.media_types['images']:
-                                valid = True
-                            elif type_key == "videos" and ext in self.bot.media_types['videos']:
-                                valid = True
-                            elif type_key == "all" and ext in self.bot.media_types['all']:
-                                valid = True
+                        # Vérification du type de fichier
+                        valid = False
+                        if type_key == "images" and ext in self.bot.media_types['images']:
+                            valid = True
+                        elif type_key == "videos" and ext in self.bot.media_types['videos']:
+                            valid = True
+                        elif type_key == "all" and ext in self.bot.media_types['all']:
+                            valid = True
 
-                            if valid:
-                                if type_key not in media_files:
-                                    media_files[type_key] = []
-                                media_files[type_key].append(attachment)
-                                total_size += attachment.size
+                        if valid:
+                            if type_key not in media_files:
+                                media_files[type_key] = []
+                            media_files[type_key].append(attachment)
+                            total_size += attachment.size
 
-                if not media_files:
-                    await status_message.edit(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.")
-                    return
+            if not media_files:
+                await interaction.followup.send(content=f"❌ Aucun fichier de type {type_key} trouvé dans les {processed_messages} derniers messages.", ephemeral=True)
+                return
 
-                # Création du thread pour les téléchargements
-                thread = await interaction.channel.create_thread(
-                    name=f"📥 Download {type_key} ({sum(len(files) for files in media_files.values())} files)",
-                    type=discord.ChannelType.public_thread,
+            # Création du thread pour les téléchargements
+            thread = await interaction.channel.create_thread(
+                name=f"📥 Download {type_key} ({sum(len(files) for files in media_files.values())} files)",
+                type=discord.ChannelType.public_thread,
+            )
+
+            # Message récapitulatif
+            summary = (
+                "╔═══════════════════════════════════════════════╗\n"
+                "              Media Download Ready               \n"
+                "╚═══════════════════════════════════════════════╝\n\n"
+                f"📊 **Files Found**\n"
+                f"• Total Files: {sum(len(files) for files in media_files.values())}\n"
+                f"• Messages Analyzed: {processed_messages}\n"
+                f"• Total Size: {self._format_size(total_size)}\n\n"
+                "📥 **Download Instructions**\n"
+                "1. Download `MediaDownloader.bat`\n"
+                "2. Double-click to run\n"
+                "3. Choose download location\n"
+                "4. Wait for completion\n\n"
+                "🛡️ **Security Information**\n"
+                "• Verified Safe Script\n"
+                "• Auto-organizing Downloads\n"
+                "• Smart Folder Structure\n"
+            )
+
+            # Création et envoi du script
+            batch_content = self._create_batch_script(media_files)
+            
+            # Créer un fichier temporaire pour le script batch
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
+                f.write(batch_content)
+                batch_path = f.name
+
+            # Envoyer le fichier dans le thread
+            await thread.send(
+                summary,
+                file=discord.File(
+                    batch_path,
+                    filename='MediaDownloader.bat'
                 )
+            )
 
-                # Message récapitulatif
-                summary = (
-                    "╔═══════════════════════════════════════════════╗\n"
-                    "              Media Download Ready               \n"
-                    "╚═══════════════════════════════════════════════╝\n\n"
-                    f"📊 **Files Found**\n"
-                    f"• Total Files: {sum(len(files) for files in media_files.values())}\n"
-                    f"• Messages Analyzed: {processed_messages}\n"
-                    f"• Total Size: {self._format_size(total_size)}\n\n"
-                    "📥 **Download Instructions**\n"
-                    "1. Download `MediaDownloader.bat`\n"
-                    "2. Double-click to run\n"
-                    "3. Choose download location\n"
-                    "4. Wait for completion\n\n"
-                    "🛡️ **Security Information**\n"
-                    "• Verified Safe Script\n"
-                    "• Auto-organizing Downloads\n"
-                    "• Smart Folder Structure\n"
-                )
+            # Nettoyer le fichier temporaire
+            os.unlink(batch_path)
 
-                # Création et envoi du script
-                batch_content = self._create_batch_script(media_files)
-                
-                # Créer un fichier temporaire pour le script batch
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.bat', mode='w', encoding='utf-8') as f:
-                    f.write(batch_content)
-                    batch_path = f.name
+            # Mise à jour des compteurs et sauvegarde immédiate
+            self.bot.download_count += 1
+            self.bot.successful_downloads += sum(len(files) for files in media_files.values())
+            self.bot.failed_downloads += 0
+            self.bot.downloads_by_type[type_key] += sum(len(files) for files in media_files.values())
+            self.bot.save_counters()  # Sauvegarde après chaque mise à jour
 
-                # Envoyer le fichier dans le thread
-                await thread.send(
-                    summary,
-                    file=discord.File(
-                        batch_path,
-                        filename='MediaDownloader.bat'
-                    )
-                )
-
-                # Nettoyer le fichier temporaire
-                os.unlink(batch_path)
-
-                # Mise à jour des compteurs et sauvegarde immédiate
-                self.bot.download_count += 1
-                self.bot.successful_downloads += sum(len(files) for files in media_files.values())
-                self.bot.failed_downloads += 0
-                self.bot.downloads_by_type[type_key] += sum(len(files) for files in media_files.values())
-                self.bot.save_counters()  # Sauvegarde après chaque mise à jour
-
-                # Message de confirmation
-                try:
-                    await status_message.edit(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.")
-                except discord.NotFound:
-                    await interaction.followup.send(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.", ephemeral=True)
-
-            except discord.NotFound:
-                # Si l'interaction a expiré, on envoie un nouveau message
-                await interaction.followup.send("❌ The interaction has expired. Please try the command again.", ephemeral=True)
+            # Message de confirmation
+            await interaction.followup.send(content=f"✅ Found {sum(len(files) for files in media_files.values())} files! Check the thread for download.", ephemeral=True)
 
         except Exception as e:
-            try:
-                await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-            except discord.NotFound:
-                print(f"Error in download_media and couldn't send followup: {e}")
-            await self.bot.send_error_log("download command", e)
+            print(f"Error: {e}")
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="suggest", description="Submit a suggestion for the bot")
     @app_commands.describe(
