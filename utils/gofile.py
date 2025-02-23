@@ -48,9 +48,10 @@ class GoFileUploader:
                 
                 # Utilisation de l'API v2 de GoFile
                 upload_url = f"https://{server}.gofile.io/uploadFile"
+                
+                # Ne pas définir manuellement Content-Type, aiohttp le gère automatiquement
                 headers = {
-                    'Accept': 'application/json',
-                    'Content-Type': 'multipart/form-data'
+                    'Accept': 'application/json'
                 }
                 
                 print(f"Uploading to: {upload_url}")
