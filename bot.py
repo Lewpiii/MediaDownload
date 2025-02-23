@@ -19,7 +19,6 @@ import json
 from pathlib import Path
 import zipfile
 from utils.logging import Logger
-from utils.pixeldrain import PixelDrainUploader
 from utils.catbox import CatboxUploader
 
 # Configuration
