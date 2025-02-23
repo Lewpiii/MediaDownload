@@ -56,9 +56,9 @@ class GoFileUploader:
                             if not self.guest_token:
                                 self.guest_token = data["data"]["guestToken"]
                                 print(f"Saved guest token: {self.guest_token}")
-                            # Si c'est le premier fichier, on retourne le folderId et l'URL
+                            # Si c'est le premier fichier, on retourne le parentFolderCode et l'URL
                             if not folder_id:
-                                return data["data"]["parentFolder"], data["data"]["downloadPage"]
+                                return data["data"]["parentFolderCode"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
                     response_text = await response.text()
                     raise Exception(f"File upload failed: {response_text}")
@@ -137,11 +137,11 @@ class GoFileUploader:
                     print(f"Processing file: {file.filename}")
                     file_data = await file.read()
                     
-                    # Pour le premier fichier, on récupère le folder_id
+                    # Pour le premier fichier, on récupère le parentFolderCode
                     if not folder_id:
                         folder_id, download_url = await self.upload_file(file_data, file.filename, server)
                     else:
-                        # Pour les fichiers suivants, on utilise le même folder_id et guest token
+                        # Pour les fichiers suivants, on utilise le même parentFolderCode
                         _, _ = await self.upload_file(file_data, file.filename, server, folder_id)
                     
                     print(f"Uploaded {file.filename} to folder {folder_id}")
