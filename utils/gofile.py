@@ -42,14 +42,13 @@ class GoFileUploader:
                 
                 # Ajout des paramètres optionnels
                 if folder_id:
-                    data.add_field('folderId', folder_id)
+                    data.add_field('parentFolderId', folder_id)
                 if self.guest_token:
                     data.add_field('token', self.guest_token)
                 
-                # Utilisation de l'API v2 de GoFile
-                upload_url = f"https://{server}.gofile.io/uploadFile"
+                # Nouvel endpoint de l'API
+                upload_url = f"https://{server}.gofile.io/contents/upload"
                 
-                # Ne pas définir manuellement Content-Type, aiohttp le gère automatiquement
                 headers = {
                     'Accept': 'application/json'
                 }
@@ -66,15 +65,12 @@ class GoFileUploader:
                         if data["status"] == "ok":
                             # Sauvegarder le guest token du premier upload
                             if not self.guest_token:
-                                self.guest_token = data["data"]["guestToken"]
+                                self.guest_token = data["data"]["token"]
                                 print(f"Saved guest token: {self.guest_token}")
                             
                             # Pour le premier fichier
                             if not folder_id:
-                                # Créer un nouveau dossier pour regrouper les fichiers
-                                folder_data = await self.create_folder(data["data"]["guestToken"], "media_collection")
-                                if folder_data:
-                                    return folder_data["id"], data["data"]["downloadPage"]
+                                return data["data"]["id"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
                     response_text = await response.text()
                     raise Exception(f"File upload failed: {response_text}")
