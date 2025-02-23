@@ -239,44 +239,61 @@ class DownloadCog(commands.Cog):
                 type_size = format_size(type_stats['size'])
                 response.append(f"• {media_type}: {type_stats['count']} files ({type_size})")
 
-        # ... reste du code ...
+        # Détails par catégorie
+        response.append("\n📑 Details:")
+        for category, cat_stats in stats['categories'].items():
+            if category != "Others" and cat_stats['count'] > 0:
+                cat_size = format_size(cat_stats['size'])
+                response.append(f"• {category}: {cat_stats['count']} files ({cat_size})")
+                
+                # Sous-catégories
+                for subcat, subcat_stats in cat_stats['subcategories'].items():
+                    if subcat_stats['count'] > 0:
+                        subcat_size = format_size(subcat_stats['size'])
+                        response.append(f"  - {subcat}: {subcat_stats['count']} ({subcat_size})")
 
+        # Fichiers non classés
+        if "Others" in stats['categories'] and stats['categories']['Others']['count'] > 0:
+            others_size = format_size(stats['categories']['Others']['size'])
+            response.append(f"\n📦 Unclassified: {stats['categories']['Others']['count']} files ({others_size})")
+
+        return "\n".join(response)
+
+    @commands.command(name='dl')
     async def download(self, ctx):
         """Télécharge et organise les médias du message"""
         try:
-            # ... code existant ...
+            # Vérifier s'il y a des pièces jointes
+            if not ctx.message.attachments:
+                if ctx.message.reference:  # Vérifier s'il y a un message référencé
+                    referenced_msg = await ctx.fetch_message(ctx.message.reference.message_id)
+                    attachments = referenced_msg.attachments
+                else:
+                    await ctx.send("❌ Aucun média trouvé")
+                    return
+            else:
+                attachments = ctx.message.attachments
 
-            # Message de chargement avec animation
+            if not attachments:
+                await ctx.send("❌ Aucun média trouvé")
+                return
+
+            # Message de chargement avec progression
             loading_msg = await ctx.send("⏳ Analyse des fichiers en cours...")
-            loading_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-            loading_idx = 0
-
-            async def update_loading(text):
-                nonlocal loading_idx
-                loading_idx = (loading_idx + 1) % len(loading_chars)
-                await loading_msg.edit(content=f"{loading_chars[loading_idx]} {text}")
 
             # Organiser les fichiers par type
             media_files: Dict[str, List[discord.Attachment]] = {}
-            total_files = len(attachments)
-            for idx, attachment in enumerate(attachments, 1):
-                await update_loading(f"Traitement des fichiers... ({idx}/{total_files})")
+            for attachment in attachments:
                 file_type = attachment.filename.split('.')[-1].lower()
                 if file_type not in media_files:
                     media_files[file_type] = []
                 media_files[file_type].append(attachment)
 
-            # Mettre à jour le message de chargement pendant l'upload
-            upload_task = self.uploader.organize_and_upload(
-                media_files, 
-                server_name=ctx.guild.name if ctx.guild else "DM"
-            )
-            
-            while not upload_task.done():
-                await update_loading("Upload en cours... ⬆️")
-                await asyncio.sleep(0.5)
+            # Mettre à jour le message de chargement
+            await loading_msg.edit(content="⏳ Classification et organisation des fichiers...")
 
-            stats, url = await upload_task
+            # Upload les fichiers
+            stats, url = await self.uploader.organize_and_upload(media_files)
 
             # Formater et envoyer le message final
             response = self.format_stats(stats)

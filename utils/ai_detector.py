@@ -26,31 +26,31 @@ class MediaDetector:
         try:
             print("Loading AI models...")
             
-            # Définir le dossier de cache
-            cache_dir = Path("model_cache")
-            cache_dir.mkdir(exist_ok=True)
+            # Définir un dossier de cache permanent
+            self.cache_dir = Path("/opt/render/project/src/model_cache")
+            self.cache_dir.mkdir(exist_ok=True)
             
-            # Charger YOLOv5 avec cache local
-            if not (cache_dir / "yolov5s.pt").exists():
-                print("Downloading YOLOv5 model...")
-                torch.hub.set_dir(str(cache_dir))
+            # Charger depuis le cache si possible
+            if (self.cache_dir / "yolov5s.pt").exists():
+                print("Loading YOLOv5 from cache...")
                 self.yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', trust_repo=True)
             else:
-                print("Loading YOLOv5 from cache...")
+                print("Downloading YOLOv5 model...")
+                torch.hub.set_dir(str(self.cache_dir))
                 self.yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', trust_repo=True)
 
             # Attendre un peu entre les téléchargements
             time.sleep(2)
             
             # Charger ResNet avec cache local
-            if not (cache_dir / "resnet18.pth").exists():
+            if not (self.cache_dir / "resnet18.pth").exists():
                 print("Downloading ResNet model...")
                 self.resnet_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
-                torch.save(self.resnet_model.state_dict(), cache_dir / "resnet18.pth")
+                torch.save(self.resnet_model.state_dict(), self.cache_dir / "resnet18.pth")
             else:
                 print("Loading ResNet from cache...")
                 self.resnet_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
-                self.resnet_model.load_state_dict(torch.load(cache_dir / "resnet18.pth"))
+                self.resnet_model.load_state_dict(torch.load(self.cache_dir / "resnet18.pth"))
 
             self.confidence_threshold = 0.6
             print("AI models loaded successfully!")
