@@ -81,7 +81,7 @@ class CatboxUploader:
         
         return zip_buffer.getvalue(), stats
 
-    async def organize_and_upload(self, media_files: Dict[str, List[discord.Attachment]]) -> Tuple[Dict, str]:
+    async def organize_and_upload(self, media_files: Dict[str, List[discord.Attachment]], server_name: str) -> Tuple[Dict, str]:
         """Upload tous les fichiers dans un ZIP organisé"""
         try:
             # Analyser et télécharger les fichiers
@@ -94,12 +94,15 @@ class CatboxUploader:
                     processed_files.append((file.filename, file_data, classification))
                     print(f"Classified {file.filename} as {classification}")
 
-            # Créer le ZIP
+            # Créer le ZIP avec le nom du serveur
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_server_name = "".join(c for c in server_name if c.isalnum() or c in (' ', '-', '_')).strip()
+            zip_filename = f"{safe_server_name}_media_{timestamp}.zip"
+            
+            # Créer le ZIP
             zip_data, stats = await self.create_zip(processed_files, timestamp)
             
             # Upload le ZIP
-            zip_filename = f"media_collection_{timestamp}.zip"
             url = await self.upload_file(zip_data, zip_filename)
             
             return stats, url

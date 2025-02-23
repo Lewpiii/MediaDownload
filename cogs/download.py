@@ -10,6 +10,7 @@ from datetime import datetime
 from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
 from utils.catbox import CatboxUploader
 from typing import Dict, List
+import asyncio
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
@@ -222,6 +223,70 @@ class DownloadCog(commands.Cog):
         )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    def format_stats(self, stats: Dict) -> str:
+        """Formate les statistiques en message lisible"""
+        total_size = format_size(stats['total_size'])
+        response = [
+            "✅ Download Ready!",
+            f"📁 Total: {stats['total']} files ({total_size})\n"
+        ]
+
+        # Statistiques par type principal
+        response.append("📊 By Type:")
+        for media_type, type_stats in stats['types'].items():
+            if type_stats['count'] > 0:
+                type_size = format_size(type_stats['size'])
+                response.append(f"• {media_type}: {type_stats['count']} files ({type_size})")
+
+        # ... reste du code ...
+
+    async def download(self, ctx):
+        """Télécharge et organise les médias du message"""
+        try:
+            # ... code existant ...
+
+            # Message de chargement avec animation
+            loading_msg = await ctx.send("⏳ Analyse des fichiers en cours...")
+            loading_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+            loading_idx = 0
+
+            async def update_loading(text):
+                nonlocal loading_idx
+                loading_idx = (loading_idx + 1) % len(loading_chars)
+                await loading_msg.edit(content=f"{loading_chars[loading_idx]} {text}")
+
+            # Organiser les fichiers par type
+            media_files: Dict[str, List[discord.Attachment]] = {}
+            total_files = len(attachments)
+            for idx, attachment in enumerate(attachments, 1):
+                await update_loading(f"Traitement des fichiers... ({idx}/{total_files})")
+                file_type = attachment.filename.split('.')[-1].lower()
+                if file_type not in media_files:
+                    media_files[file_type] = []
+                media_files[file_type].append(attachment)
+
+            # Mettre à jour le message de chargement pendant l'upload
+            upload_task = self.uploader.organize_and_upload(
+                media_files, 
+                server_name=ctx.guild.name if ctx.guild else "DM"
+            )
+            
+            while not upload_task.done():
+                await update_loading("Upload en cours... ⬆️")
+                await asyncio.sleep(0.5)
+
+            stats, url = await upload_task
+
+            # Formater et envoyer le message final
+            response = self.format_stats(stats)
+            response += f"\n\n🔗 Download Link:\n{url}"
+
+            await loading_msg.edit(content=response)
+
+        except Exception as e:
+            await ctx.send(f"❌ Une erreur est survenue: {str(e)}")
+            print(f"Error in download command: {e}")
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 

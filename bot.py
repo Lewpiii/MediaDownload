@@ -66,23 +66,82 @@ class MediaDownloadBot(commands.Bot):
         self.last_status = True
         self.log_channel = None
         self.status_task = None
+        self.status_index = 0
+        self.log_webhook_url = os.getenv('LOG_WEBHOOK_URL')
 
     async def setup_hook(self):
         """Configuration initiale du bot"""
+        print("=== Debug Discord Bot ===")
+        print(f"Token exists: {'Yes' if os.getenv('TOKEN') else 'No'}")
+        print(f"Logs Channel ID: {os.getenv('LOGS_CHANNEL_ID')}")
+        print(f"Webhook URL exists: {'Yes' if self.log_webhook_url else 'No'}")
+        print("=======================")
+
         # Charger les cogs
-        await self.load_extension('cogs.download')
-        await self.load_extension('cogs.help')
-        await self.load_extension('cogs.stats')
-        await self.load_extension('cogs.feedback')
+        for filename in os.listdir('./cogs'):
+            if filename.endswith('.py'):
+                try:
+                    await self.load_extension(f'cogs.{filename[:-3]}')
+                    print(f"Loaded {filename}")
+                except Exception as e:
+                    print(f"Failed to load {filename}: {e}")
+
         print("✓ All cogs loaded")
+        
+        # Démarrer la rotation du statut
+        self.rotate_status.start()
+
+    @tasks.loop(minutes=5)
+    async def rotate_status(self):
+        """Change le statut du bot toutes les 5 minutes"""
+        try:
+            if self.status_index == 0:
+                activity = discord.Activity(
+                    type=discord.ActivityType.WATCHING,  # En majuscules
+                    name=f"/help | {len(self.guilds)} servers"
+                )
+                await self.change_presence(
+                    status=discord.Status.online,
+                    activity=activity
+                )
+            else:
+                total_users = sum(g.member_count for g in self.guilds)
+                activity = discord.Activity(
+                    type=discord.ActivityType.WATCHING,  # En majuscules
+                    name=f"/help | {total_users} users"
+                )
+                await self.change_presence(
+                    status=discord.Status.online,
+                    activity=activity
+                )
+            
+            self.status_index = (self.status_index + 1) % 2
+
+        except Exception as e:
+            print(f"Error in rotate_status: {e}")
+
+    @rotate_status.before_loop
+    async def before_rotate_status(self):
+        """Attendre que le bot soit prêt avant de démarrer la rotation"""
+        await self.wait_until_ready()
 
     async def on_ready(self):
-        """Quand le bot est prêt"""
-        print(f"\n=== Bot Ready ===")
+        """Événement appelé quand le bot est prêt"""
+        print("\n=== Bot Ready ===")
         print(f"Logged in as {self.user.name}")
         print(f"Bot ID: {self.user.id}")
         print(f"Guild count: {len(self.guilds)}")
-        print("================\n")
+        print("================")
+
+        # Définir le statut initial
+        activity = discord.Activity(
+            type=discord.ActivityType.WATCHING,
+            name=f"/help | {len(self.guilds)} servers"
+        )
+        await self.change_presence(
+            status=discord.Status.online,
+            activity=activity
+        )
         
         # Initialiser le channel de logs
         self.log_channel = self.get_channel(int(os.getenv('LOGS_CHANNEL_ID')))
@@ -148,20 +207,63 @@ class MediaDownloadBot(commands.Bot):
             
             await asyncio.sleep(300)  # Check every 5 minutes
 
-    async def on_guild_join(self, guild):
-        """Quand le bot rejoint un serveur"""
-        if self.log_channel:
+    async def on_guild_join(self, guild: discord.Guild):
+        """Envoie un message détaillé quand le bot rejoint un serveur"""
+        try:
+            # Créer un embed riche
             embed = discord.Embed(
-                title="📥 Bot Added to Server",
-                description=f"Server: {guild.name}\nID: {guild.id}",
-                color=0x00FF00,
+                title="🎉 Bot Added to New Server!",
+                description=f"**{self.user.name}** has been added to a new server!",
+                color=0x2ECC71,
                 timestamp=datetime.utcnow()
             )
-            embed.add_field(name="Members", value=str(guild.member_count))
-            embed.add_field(name="Owner", value=str(guild.owner))
+
+            # Informations sur le serveur
+            embed.add_field(
+                name="Server Info",
+                value=f"""
+                **Name:** {guild.name}
+                **ID:** {guild.id}
+                **Owner:** {guild.owner}
+                **Members:** {guild.member_count}
+                **Created:** <t:{int(guild.created_at.timestamp())}:R>
+                """,
+                inline=False
+            )
+
+            # Statistiques du bot
+            embed.add_field(
+                name="Bot Stats",
+                value=f"""
+                **Server Count:** {len(self.guilds)}
+                **Total Users:** {sum(g.member_count for g in self.guilds)}
+                """,
+                inline=False
+            )
+
+            # Ajouter l'icône du serveur
             if guild.icon:
                 embed.set_thumbnail(url=guild.icon.url)
-            await self.log_channel.send(embed=embed)
+
+            # Envoyer via webhook si configuré
+            if self.log_webhook_url:
+                async with aiohttp.ClientSession() as session:
+                    webhook = discord.Webhook.from_url(
+                        self.log_webhook_url,
+                        session=session
+                    )
+                    await webhook.send(embed=embed)
+            
+            # Sinon, envoyer dans le canal de logs si configuré
+            elif logs_channel_id := os.getenv('LOGS_CHANNEL_ID'):
+                channel = self.get_channel(int(logs_channel_id))
+                if channel:
+                    await channel.send(embed=embed)
+
+            print(f"✓ Joined server: {guild.name} (ID: {guild.id})")
+
+        except Exception as e:
+            print(f"Error in on_guild_join: {e}")
 
     async def on_guild_remove(self, guild):
         """Quand le bot quitte un serveur"""
