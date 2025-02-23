@@ -364,16 +364,19 @@ class DownloadCog(commands.Cog):
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
-                        has_voted = bool(data.get("voted", 0))
+                        # La réponse est 1 si l'utilisateur a voté, 0 sinon
+                        has_voted = data.get("voted", 0) == 1
                         print(f"Vote response: {data}, Has voted: {has_voted}")  # Debug log
                         return has_voted
                     else:
                         error_text = await response.text()
                         print(f"API Error: Status {response.status}, Response: {error_text}")  # Debug log
-                        return False
+                        # En cas d'erreur, on considère que l'utilisateur a voté pour éviter les faux négatifs
+                        return True
         except Exception as e:
             print(f"Vote check error: {str(e)}")  # Debug log
-            return False
+            # En cas d'erreur, on considère que l'utilisateur a voté
+            return True
 
     def _create_exe_wrapper(self, batch_content):
         """Create an exe wrapper for the batch script"""
