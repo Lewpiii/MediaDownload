@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 import zipfile
 from utils.logging import Logger
+from utils.anonfiles import AnonFilesUploader
 
 # Configuration
 load_dotenv()
