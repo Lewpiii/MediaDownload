@@ -8,11 +8,12 @@ import zipfile
 import time
 from datetime import datetime
 from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
-from utils.gofile import GoFileUploader
+from utils.anonfiles import AnonFilesUploader
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.uploader = AnonFilesUploader()
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté via l'API Top.gg"""
@@ -166,8 +167,7 @@ class DownloadCog(commands.Cog):
 
             # 8. Upload Gofile
             await status_message.edit(content="📤 Uploading files to Gofile...")
-            uploader = GoFileUploader()
-            download_link = await uploader.organize_and_upload(media_files)
+            download_link = await self.uploader.organize_and_upload(media_files)
 
             success_embed = discord.Embed(
                 title="✅ Download Ready!",
