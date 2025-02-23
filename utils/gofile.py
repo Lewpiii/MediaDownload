@@ -6,8 +6,9 @@ import discord
 
 class GoFileUploader:
     def __init__(self, token: str = None):
-        self.token = token  # Optionnel maintenant
+        self.token = token
         self.base_url = "https://api.gofile.io"
+        self.headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     async def get_server(self) -> str:
         """Obtient un serveur pour l'upload"""
@@ -19,11 +20,10 @@ class GoFileUploader:
                         data = await response.json()
                         print(f"Server response data: {data}")
                         if data.get("status") == "ok":
-                            # Choisir le premier serveur disponible
-                            servers = data["data"]["servers"]
-                            if servers:
-                                return servers[0]  # Choisir le premier serveur
-                            raise Exception("No servers available")
+                            # Extraire uniquement le nom du serveur (ex: "store5")
+                            server = data["data"]["servers"][0]["name"]
+                            print(f"Selected server: {server}")
+                            return server
                         raise Exception(f"Invalid server response: {data}")
                     response_text = await response.text()
                     raise Exception(f"Failed to get server: {response_text}")
@@ -32,7 +32,7 @@ class GoFileUploader:
             raise
 
     async def upload_file(self, file_data: bytes, filename: str, server: str) -> str:
-        """Upload un fichier"""
+        """Upload un fichier selon la documentation"""
         try:
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
@@ -41,7 +41,9 @@ class GoFileUploader:
                 upload_url = f"https://{server}.gofile.io/contents/uploadfile"
                 print(f"Uploading to: {upload_url}")
                 
-                async with session.post(upload_url, data=data) as response:
+                headers = self.headers.copy() if self.token else {}
+                
+                async with session.post(upload_url, data=data, headers=headers) as response:
                     print(f"Upload response status: {response.status}")
                     if response.status == 200:
                         data = await response.json()
