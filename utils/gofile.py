@@ -7,19 +7,23 @@ import discord
 class GoFileUploader:
     def __init__(self, token: str = None):
         self.token = token  # Optionnel maintenant
-        self.base_url = "https://api.gofile.io"  # URL de base sans version
+        self.base_url = "https://api.gofile.io"
 
     async def get_server(self) -> str:
-        """Obtient le meilleur serveur pour l'upload"""
+        """Obtient un serveur pour l'upload"""
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self.base_url}/getServer") as response:
+                async with session.get(f"{self.base_url}/servers") as response:
                     print(f"Server response status: {response.status}")
                     if response.status == 200:
                         data = await response.json()
                         print(f"Server response data: {data}")
                         if data.get("status") == "ok":
-                            return data["data"]["server"]
+                            # Choisir le premier serveur disponible
+                            servers = data["data"]["servers"]
+                            if servers:
+                                return servers[0]  # Choisir le premier serveur
+                            raise Exception("No servers available")
                         raise Exception(f"Invalid server response: {data}")
                     response_text = await response.text()
                     raise Exception(f"Failed to get server: {response_text}")
@@ -34,7 +38,7 @@ class GoFileUploader:
                 data = aiohttp.FormData()
                 data.add_field('file', file_data, filename=filename)
                 
-                upload_url = f"https://{server}.gofile.io/uploadFile"
+                upload_url = f"https://{server}.gofile.io/contents/uploadfile"
                 print(f"Uploading to: {upload_url}")
                 
                 async with session.post(upload_url, data=data) as response:
