@@ -60,6 +60,10 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="All messages", value=0)
     ])
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
+        # Ajout de debug logs
+        print(f"Starting download command with type: {type.value}, number: {number.value}")
+        print(f"Media types available: {self.bot.media_types}")
+        
         # Vérifier les permissions avant de commencer
         has_permissions, missing_perms = await self.check_permissions(interaction.channel)
         if not has_permissions:
@@ -80,14 +84,18 @@ class DownloadCog(commands.Cog):
             async for message in interaction.channel.history(limit=number.value):
                 for attachment in message.attachments:
                     ext = os.path.splitext(attachment.filename.lower())[1]
+                    print(f"Processing file: {attachment.filename} with extension: {ext}")
                     
                     if type.value == "images" and ext in self.bot.media_types['images']:
+                        print(f"Adding image: {attachment.filename}")
                         media_files['Images'].append(attachment)
                         total_size += attachment.size
                     elif type.value == "videos" and ext in self.bot.media_types['videos']:
+                        print(f"Adding video: {attachment.filename}")
                         media_files['Videos'].append(attachment)
                         total_size += attachment.size
                     elif type.value == "all" and ext in self.bot.media_types['all']:
+                        print(f"Adding file to all: {attachment.filename}")
                         if ext in self.bot.media_types['images']:
                             media_files['Images'].append(attachment)
                         else:

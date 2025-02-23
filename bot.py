@@ -47,6 +47,7 @@ class MediaDownloadBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.guilds = True  # Ajouté pour les logs de serveur
         
         super().__init__(
             command_prefix='!',
@@ -60,6 +61,9 @@ class MediaDownloadBot(commands.Bot):
             'videos': ['.mp4', '.webm', '.mov'],
             'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
         }
+        
+        # Initialiser le logger
+        self.logger = Logger(self)
 
     async def setup_hook(self):
         """Configuration initiale du bot"""
@@ -108,6 +112,14 @@ class MediaDownloadBot(commands.Bot):
                         pass
                     last_status = False
             await asyncio.sleep(300)
+
+    async def on_guild_join(self, guild):
+        """Log quand le bot rejoint un serveur"""
+        await self.logger.log_guild_join(guild)
+
+    async def on_guild_remove(self, guild):
+        """Log quand le bot quitte un serveur"""
+        await self.logger.log_guild_remove(guild)
 
 def run_bot():
     """Démarrer le bot"""
