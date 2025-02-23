@@ -16,18 +16,44 @@ class DownloadCog(commands.Cog):
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté via l'API Top.gg"""
+        token = os.getenv('TOP_GG_TOKEN')
+        if not token:
+            print("⚠️ TOP_GG_TOKEN not found in environment variables")
+            return False
+            
         try:
+            print(f"\n=== Vote Check Debug ===")
+            print(f"Checking vote for user ID: {user_id}")
+            print(f"Using token: {token[:5]}...{token[-5:]}")  # Affiche partiellement le token pour debug
+            
             async with aiohttp.ClientSession() as session:
-                headers = {"Authorization": os.getenv('TOP_GG_TOKEN')}
+                headers = {"Authorization": token}
                 url = f"https://top.gg/api/bots/1332684877551763529/check?userId={user_id}"
                 
+                print(f"Request URL: {url}")
+                print(f"Request headers: {headers}")
+                
                 async with session.get(url, headers=headers) as response:
+                    print(f"Response status: {response.status}")
+                    
                     if response.status == 200:
                         data = await response.json()
-                        return data.get("voted") == 1
-                    return False
+                        print(f"Response data: {data}")
+                        has_voted = data.get("voted") == 1
+                        print(f"Has voted: {has_voted}")
+                        return has_voted
+                    elif response.status == 401:
+                        print("❌ Invalid Top.gg token")
+                        return False
+                    else:
+                        print(f"❌ Unexpected status code: {response.status}")
+                        return False
+                        
+        except aiohttp.ClientError as e:
+            print(f"Network error during vote check: {e}")
+            return False
         except Exception as e:
-            print(f"Vote check error: {e}")
+            print(f"Unexpected error during vote check: {e}")
             return False
 
     async def check_permissions(self, channel: discord.TextChannel) -> bool:
@@ -119,9 +145,21 @@ class DownloadCog(commands.Cog):
             if not has_voted:
                 embed = discord.Embed(
                     title="⚠️ Vote Required",
-                    description="You need to vote for the bot to download large files!",
+                    description=(
+                        "You need to vote for the bot to download large files!\n\n"
+                        "📝 **Why vote?**\n"
+                        "• Support the bot\n"
+                        "• Get access to all features\n"
+                        "• Help us grow\n\n"
+                        "🔗 **Vote Link**\n"
+                        "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
+                        "✨ **Free Features**\n"
+                        "• Download files up to 25MB\n"
+                        "• Direct ZIP downloads\n"
+                    ),
                     color=0xFF0000
                 )
+                embed.set_footer(text="Your vote lasts 12 hours!")
                 await status_message.edit(embed=embed)
                 return
 
@@ -132,7 +170,13 @@ class DownloadCog(commands.Cog):
 
             embed = discord.Embed(
                 title="✅ Download Ready!",
-                description=f"🔗 **Download Link:**\n{download_link}",
+                description=(
+                    f"📁 **Total Files:** {sum(len(files) for files in media_files.values())}\n"
+                    f"📊 **Files:**\n"
+                    f"• Images: {len(media_files['Images'])}\n"
+                    f"• Videos: {len(media_files['Videos'])}\n\n"
+                    f"🔗 **Download Link:**\n{download_link}"
+                ),
                 color=0x2ECC71
             )
             await status_message.edit(embed=embed)
@@ -140,9 +184,28 @@ class DownloadCog(commands.Cog):
         except Exception as e:
             print(f"Error in download_media: {e}")
             try:
-                await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+                await status_message.edit(content=f"❌ An error occurred: {str(e)}")
             except:
                 print("Failed to send error message")
+
+    @app_commands.command(name="checkvote", description="Check your vote status")
+    async def check_vote_status(self, interaction: discord.Interaction):
+        """Commande de debug pour vérifier le statut de vote"""
+        await interaction.response.defer(ephemeral=True)
+        
+        has_voted = await self.check_vote(interaction.user.id)
+        
+        embed = discord.Embed(
+            title="Vote Status Check",
+            description=(
+                f"User ID: {interaction.user.id}\n"
+                f"Has voted: {has_voted}\n"
+                f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            ),
+            color=0x00FF00 if has_voted else 0xFF0000
+        )
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
