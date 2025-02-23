@@ -184,40 +184,6 @@ class DownloadCog(commands.Cog):
                 except Exception as e:
                     print(f"Error cleaning temp file {temp_file}: {e}")
 
-    @app_commands.command(name="help", description="Show bot help")
-    async def help(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="📚 Media Download Help",
-            description="Here are all available commands:",
-            color=0x3498db
-        )
-        
-        embed.add_field(
-            name="/download",
-            value="Download media files from the channel\n• Choose type: Images, Videos, or All\n• Choose number of messages to scan",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="/bug",
-            value="Report a bug to the developers",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="/suggest",
-            value="Submit a suggestion for the bot",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="/stats",
-            value="Show bot statistics",
-            inline=False
-        )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
     @app_commands.command(name="stats", description="Show bot statistics")
     async def stats(self, interaction: discord.Interaction):
         embed = discord.Embed(
