@@ -7,8 +7,7 @@ import discord
 class GoFileUploader:
     def __init__(self, token: str = None):
         self.token = token  # Optionnel maintenant
-        self.base_url = "https://api.gofile.io/v2"  # Mise à jour de l'URL de l'API
-        self.server = None
+        self.base_url = "https://api.gofile.io"  # URL de base sans version
 
     async def get_server(self) -> str:
         """Obtient le meilleur serveur pour l'upload"""
