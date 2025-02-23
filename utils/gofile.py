@@ -20,7 +20,7 @@ class GoFileUploader:
                         data = await response.json()
                         print(f"Server response data: {data}")
                         if data.get("status") == "ok":
-                            # Extraire uniquement le nom du serveur (ex: "store5")
+                            # On prend le premier serveur de la liste 'servers'
                             server = data["data"]["servers"][0]["name"]
                             print(f"Selected server: {server}")
                             return server
