@@ -7,7 +7,7 @@ import discord
 class GoFileUploader:
     def __init__(self, token: str = None):
         self.token = token  # Optionnel maintenant
-        self.base_url = "https://api.gofile.io"
+        self.base_url = "https://api.gofile.io/v2"  # Mise à jour de l'URL de l'API
         self.server = None
 
     async def get_server(self) -> str:
@@ -15,10 +15,15 @@ class GoFileUploader:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.base_url}/getServer") as response:
+                    print(f"Server response status: {response.status}")
                     if response.status == 200:
                         data = await response.json()
-                        return data["data"]["server"]
-                    raise Exception(f"Failed to get server: {response.status}")
+                        print(f"Server response data: {data}")
+                        if data.get("status") == "ok":
+                            return data["data"]["server"]
+                        raise Exception(f"Invalid server response: {data}")
+                    response_text = await response.text()
+                    raise Exception(f"Failed to get server: {response_text}")
         except Exception as e:
             print(f"Error getting server: {e}")
             raise
@@ -30,9 +35,14 @@ class GoFileUploader:
                 data = aiohttp.FormData()
                 data.add_field('file', file_data, filename=filename)
                 
-                async with session.post(f"https://{server}.gofile.io/uploadFile", data=data) as response:
+                upload_url = f"https://{server}.gofile.io/uploadFile"
+                print(f"Uploading to: {upload_url}")
+                
+                async with session.post(upload_url, data=data) as response:
+                    print(f"Upload response status: {response.status}")
                     if response.status == 200:
                         data = await response.json()
+                        print(f"Upload response data: {data}")
                         if data["status"] == "ok":
                             return data["data"]["downloadPage"]
                     response_text = await response.text()
@@ -106,13 +116,16 @@ class GoFileUploader:
             upload_urls = []
             for media_type, files in media_files.items():
                 for file in files:
+                    print(f"Processing file: {file.filename}")
                     file_data = await file.read()
                     download_url = await self.upload_file(file_data, file.filename, server)
                     upload_urls.append(download_url)
                     print(f"Uploaded {file.filename}: {download_url}")
 
             # 3. Retourner l'URL du premier fichier
-            return upload_urls[0] if upload_urls else ""
+            if not upload_urls:
+                raise Exception("No files were uploaded successfully")
+            return upload_urls[0]
 
         except Exception as e:
             print(f"Error in organize_and_upload: {e}")
