@@ -36,15 +36,20 @@ class GoFileUploader:
         """Upload un fichier"""
         try:
             async with aiohttp.ClientSession() as session:
+                # Création du FormData
                 data = aiohttp.FormData()
                 data.add_field('file', file_data, filename=filename)
+                
+                # Ajout des paramètres optionnels
                 if folder_id:
-                    data.add_field('folderId', folder_id)
+                    data.add_field('parentFolder', folder_id)  # Changé de 'folderId' à 'parentFolder'
                 if self.guest_token:
                     data.add_field('token', self.guest_token)
                 
                 upload_url = f"https://{server}.gofile.io/contents/uploadfile"
                 print(f"Uploading to: {upload_url}")
+                print(f"Using folder_id: {folder_id}")
+                print(f"Using guest_token: {self.guest_token}")
                 
                 async with session.post(upload_url, data=data) as response:
                     print(f"Upload response status: {response.status}")
@@ -58,7 +63,7 @@ class GoFileUploader:
                                 print(f"Saved guest token: {self.guest_token}")
                             # Si c'est le premier fichier, on retourne le parentFolderCode et l'URL
                             if not folder_id:
-                                return data["data"]["parentFolderCode"], data["data"]["downloadPage"]
+                                return data["data"]["parentFolder"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
                     response_text = await response.text()
                     raise Exception(f"File upload failed: {response_text}")
@@ -137,11 +142,11 @@ class GoFileUploader:
                     print(f"Processing file: {file.filename}")
                     file_data = await file.read()
                     
-                    # Pour le premier fichier, on récupère le parentFolderCode
+                    # Pour le premier fichier, on récupère le parentFolder
                     if not folder_id:
                         folder_id, download_url = await self.upload_file(file_data, file.filename, server)
                     else:
-                        # Pour les fichiers suivants, on utilise le même parentFolderCode
+                        # Pour les fichiers suivants, on utilise le même parentFolder
                         _, _ = await self.upload_file(file_data, file.filename, server, folder_id)
                     
                     print(f"Uploaded {file.filename} to folder {folder_id}")
