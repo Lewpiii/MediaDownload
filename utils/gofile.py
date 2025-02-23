@@ -42,12 +42,12 @@ class GoFileUploader:
                 
                 # Ajout des paramètres optionnels
                 if folder_id:
-                    data.add_field('parentFolderId', folder_id)
+                    data.add_field('parentFolder', folder_id)
                 if self.guest_token:
                     data.add_field('token', self.guest_token)
                 
-                # Nouvel endpoint de l'API
-                upload_url = f"https://{server}.gofile.io/contents/upload"
+                # URL correcte pour l'upload
+                upload_url = f"https://{server}.gofile.io/uploadFile"
                 
                 headers = {
                     'Accept': 'application/json'
@@ -70,7 +70,7 @@ class GoFileUploader:
                             
                             # Pour le premier fichier
                             if not folder_id:
-                                return data["data"]["id"], data["data"]["downloadPage"]
+                                return data["data"]["parentFolder"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
                     response_text = await response.text()
                     raise Exception(f"File upload failed: {response_text}")
