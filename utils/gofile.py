@@ -42,7 +42,7 @@ class GoFileUploader:
                 
                 # Ajout des paramètres optionnels
                 if folder_id:
-                    data.add_field('parentFolderCode', folder_id)  # Utiliser parentFolderCode au lieu de parentFolder
+                    data.add_field('parentFolderCode', folder_id)  # Utiliser parentFolderCode
                 if self.guest_token:
                     data.add_field('token', self.guest_token)
                 
@@ -61,7 +61,7 @@ class GoFileUploader:
                             if not self.guest_token:
                                 self.guest_token = data["data"]["guestToken"]
                                 print(f"Saved guest token: {self.guest_token}")
-                            # Si c'est le premier fichier, on retourne le parentFolderCode et l'URL
+                            # Si c'est le premier fichier, on retourne le parentFolderCode
                             if not folder_id:
                                 return data["data"]["parentFolderCode"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
@@ -69,24 +69,6 @@ class GoFileUploader:
                     raise Exception(f"File upload failed: {response_text}")
         except Exception as e:
             print(f"Error uploading file: {e}")
-            raise
-
-    async def create_folder(self, folder_name: str) -> Dict[str, Any]:
-        """Crée un nouveau dossier"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                data = {
-                    "token": self.guest_token,
-                    "folderName": folder_name,
-                }
-                async with session.put(f"{self.base_url}/createFolder", json=data) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        if result["status"] == "ok":
-                            return result["data"]
-                    raise Exception(f"Folder creation failed: {await response.text()}")
-        except Exception as e:
-            print(f"Error creating folder: {e}")
             raise
 
     @staticmethod
@@ -131,28 +113,23 @@ class GoFileUploader:
             server = await self.get_server()
             print(f"Using server: {server}")
 
-            # 2. Upload le premier fichier pour obtenir le guest token
+            # 2. Upload le premier fichier pour obtenir le folder_id
             first_file = next(iter(media_files.values()))[0]
             file_data = await first_file.read()
             folder_id, download_url = await self.upload_file(file_data, first_file.filename, server)
             print(f"First file uploaded, got folder_id: {folder_id}")
 
-            # 3. Créer un nouveau dossier avec le guest token
-            folder_name = "media_collection"
-            folder_info = await self.create_folder(folder_name)
-            new_folder_id = folder_info["id"]
-            print(f"Created new folder with ID: {new_folder_id}")
-
-            # 4. Upload tous les fichiers dans le nouveau dossier
+            # 3. Upload tous les autres fichiers dans le même dossier
             for media_type, files in media_files.items():
                 for file in files:
                     if file != first_file:  # Skip the first file as it's already uploaded
                         print(f"Processing file: {file.filename}")
                         file_data = await file.read()
-                        _, _ = await self.upload_file(file_data, file.filename, server, new_folder_id)
-                        print(f"Uploaded {file.filename} to folder {new_folder_id}")
+                        _, _ = await self.upload_file(file_data, file.filename, server, folder_id)
+                        print(f"Uploaded {file.filename} to folder {folder_id}")
 
-            return f"https://gofile.io/d/{new_folder_id}"
+            # 4. Retourner l'URL du dossier
+            return f"https://gofile.io/d/{folder_id}"
 
         except Exception as e:
             print(f"Error in organize_and_upload: {e}")
