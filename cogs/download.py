@@ -8,12 +8,12 @@ import zipfile
 import time
 from datetime import datetime
 from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
-from utils.anonfiles import AnonFilesUploader
+from utils.pixeldrain import PixelDrainUploader
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.uploader = AnonFilesUploader()
+        self.uploader = PixelDrainUploader()
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté via l'API Top.gg"""
