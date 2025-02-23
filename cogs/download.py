@@ -11,6 +11,14 @@ from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
 from utils.catbox import CatboxUploader
 from typing import Dict, List
 
+def format_size(size_bytes: int) -> str:
+    """Convertit les bytes en format lisible"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -167,23 +175,26 @@ class DownloadCog(commands.Cog):
                 return
 
             # 8. Upload Gofile
-            await status_message.edit(content="📤 Uploading files to Gofile...")
+            await status_message.edit(content="📤 Uploading files...")
             stats, download_link = await self.uploader.organize_and_upload(media_files)
 
             success_embed = discord.Embed(
                 title="✅ Download Ready!",
                 description=(
-                    f"�� **Total Files:** {stats['total']}\n"
-                    f"📊 **Files:**\n"
-                    f"• Images: {stats['types']['Images']}\n"
-                    f"• Videos: {stats['types']['Videos']}\n\n"
+                    f"📁 Total: {stats['total']} files ({format_size(stats['total_size'])})\n"
+                    f"📊 By Type:\n"
+                    f"• Images: {stats['types']['Images']['count']} files ({format_size(stats['types']['Images']['size'])})\n"
+                    f"• Videos: {stats['types']['Videos']['count']} files ({format_size(stats['types']['Videos']['size'])})\n\n"
                     f"🎁 **Stats:**\n"
                     f"• Total: {stats['total']}\n"
                     f"• Types: {', '.join(f'{media_type}: {count}' for media_type, count in stats['types'].items())}\n\n"
-                    f"🔗 **Download Link:**\n{download_link}"
+                    f"📑 Details:\n"
+                    f"• Images: {stats['types']['Images']['count']} files ({format_size(stats['types']['Images']['size'])})\n"
+                    f"• Videos: {stats['types']['Videos']['count']} files ({format_size(stats['types']['Videos']['size'])})\n"
                 ),
                 color=0x2ECC71
             )
+            success_embed.add_field(name="🔗 Download Link:", value=download_link)
             await status_message.edit(content=None, embed=success_embed)
 
         except Exception as e:
