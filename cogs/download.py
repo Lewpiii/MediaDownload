@@ -60,10 +60,6 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="All messages", value=0)
     ])
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
-        # Ajout de debug logs
-        print(f"Starting download command with type: {type.value}, number: {number.value}")
-        print(f"Media types available: {self.bot.media_types}")
-        
         # Vérifier les permissions avant de commencer
         has_permissions, missing_perms = await self.check_permissions(interaction.channel)
         if not has_permissions:
@@ -72,15 +68,18 @@ class DownloadCog(commands.Cog):
                 ephemeral=True
             )
             return
-            
-        await interaction.response.defer(ephemeral=True)
-        temp_files = []  # Pour tracker les fichiers temporaires
+
+        # Répondre immédiatement à l'interaction
+        await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
         
         try:
             media_files = {'Images': [], 'Videos': []}
             total_size = 0
             
-            await interaction.followup.send("🔍 Searching for media...", ephemeral=True)
+            # Debug logs
+            print(f"Starting download command with type: {type.value}, number: {number.value}")
+            print(f"Media types available: {self.bot.media_types}")
+            
             async for message in interaction.channel.history(limit=number.value):
                 for attachment in message.attachments:
                     ext = os.path.splitext(attachment.filename.lower())[1]
@@ -103,15 +102,15 @@ class DownloadCog(commands.Cog):
                         total_size += attachment.size
 
             if not any(media_files.values()):
-                await interaction.followup.send("❌ No media files found!", ephemeral=True)
+                await interaction.edit_original_response(content="❌ No media files found!")
                 return
 
             # Si taille totale < 25MB, envoi direct en ZIP
             if total_size < MAX_DIRECT_DOWNLOAD_SIZE:
+                await interaction.edit_original_response(content="📦 Preparing your files...")
                 temp_zip = None
                 try:
                     temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-                    temp_files.append(temp_zip.name)
                     
                     with zipfile.ZipFile(temp_zip.name, 'w') as zf:
                         for media_type, files in media_files.items():
@@ -119,19 +118,13 @@ class DownloadCog(commands.Cog):
                                 file_data = await file.read()
                                 zf.writestr(f"{media_type}/{file.filename}", file_data)
 
-                    await interaction.followup.send(
-                        "📦 Here are your files:",
-                        file=discord.File(temp_zip.name, 'media_files.zip'),
-                        ephemeral=False
+                    await interaction.edit_original_response(
+                        content="📦 Here are your files:",
+                        attachments=[discord.File(temp_zip.name, 'media_files.zip')]
                     )
                 finally:
-                    # Nettoyage des fichiers temporaires
-                    for temp_file in temp_files:
-                        try:
-                            if os.path.exists(temp_file):
-                                os.unlink(temp_file)
-                        except Exception as e:
-                            print(f"Error cleaning temp file {temp_file}: {e}")
+                    if temp_zip and os.path.exists(temp_zip.name):
+                        os.unlink(temp_zip.name)
                 return
 
             # Si > 25MB, vérifier le vote
@@ -154,11 +147,11 @@ class DownloadCog(commands.Cog):
                     color=0xFF0000
                 )
                 embed.set_footer(text="Your vote lasts 12 hours!")
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                await interaction.edit_original_response(embed=embed)
                 return
 
             # Upload vers Gofile
-            await interaction.followup.send("📤 Uploading files to Gofile...", ephemeral=True)
+            await interaction.edit_original_response(content="📤 Uploading files to Gofile...")
             
             uploader = GoFileUploader(os.getenv('GOFILE_TOKEN'))
             download_link = await uploader.organize_and_upload(media_files)
@@ -174,19 +167,11 @@ class DownloadCog(commands.Cog):
                 ),
                 color=0x2ECC71
             )
-            await interaction.followup.send(embed=embed, ephemeral=False)
+            await interaction.edit_original_response(embed=embed)
 
         except Exception as e:
             print(f"Error in download_media: {e}")
-            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-        finally:
-            # Nettoyage final des fichiers temporaires
-            for temp_file in temp_files:
-                try:
-                    if os.path.exists(temp_file):
-                        os.unlink(temp_file)
-                except Exception as e:
-                    print(f"Error cleaning temp file {temp_file}: {e}")
+            await interaction.edit_original_response(content=f"❌ An error occurred: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
