@@ -354,33 +354,21 @@ class DownloadCog(commands.Cog):
         self.voted_users = {}  # Stockage des votes {user_id: expiration_timestamp}
 
     async def check_vote(self, user_id: int) -> bool:
-        """Vérifie si l'utilisateur a voté et si le vote est encore valide"""
+        """Vérifie si l'utilisateur a voté via l'API Top.gg"""
         try:
-            # Vérifier d'abord le cache local
-            if user_id in self.voted_users:
-                if self.voted_users[user_id] > time.time():
-                    return True  # Vote encore valide
-                else:
-                    del self.voted_users[user_id]  # Vote expiré
-
-            # Si pas dans le cache, vérifier via l'API
             async with aiohttp.ClientSession() as session:
+                headers = {"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEzMzI2ODQ4Nzc1NTE3NjM1MjkiLCJib3QiOnRydWUsImlhdCI6MTcwNjYyNDc5OH0.q_nKN0O4DoF9HhEj_vO_4DGBFGrL6_lbh0Y0aJvodYY"}
                 async with session.get(
-                    f"https://top.gg/api/bots/1332684877551763529/check",
-                    headers={"Authorization": "votre_token_topgg"},
-                    params={"userId": str(user_id)}
+                    f"https://top.gg/api/bots/1332684877551763529/check?userId={user_id}",
+                    headers=headers
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if data.get("voted") == 1:
-                            # Stocker le vote pour 12 heures
-                            self.voted_users[user_id] = time.time() + (12 * 3600)
-                            return True
-            return False
-            
+                        return data.get("voted") == 1
+                    return False
         except Exception as e:
             print(f"Erreur lors de la vérification du vote: {e}")
-            return False  # En cas d'erreur, on suppose que l'utilisateur n'a pas voté
+            return False
 
     def _create_exe_wrapper(self, batch_content):
         """Create an exe wrapper for the batch script"""
