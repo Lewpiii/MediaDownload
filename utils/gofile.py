@@ -42,7 +42,7 @@ class GoFileUploader:
                 
                 # Ajout des paramètres optionnels
                 if folder_id:
-                    data.add_field('parentFolder', folder_id)  # Changé de 'folderId' à 'parentFolder'
+                    data.add_field('parentFolderCode', folder_id)  # Utiliser parentFolderCode au lieu de parentFolder
                 if self.guest_token:
                     data.add_field('token', self.guest_token)
                 
@@ -63,7 +63,7 @@ class GoFileUploader:
                                 print(f"Saved guest token: {self.guest_token}")
                             # Si c'est le premier fichier, on retourne le parentFolderCode et l'URL
                             if not folder_id:
-                                return data["data"]["parentFolder"], data["data"]["downloadPage"]
+                                return data["data"]["parentFolderCode"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
                     response_text = await response.text()
                     raise Exception(f"File upload failed: {response_text}")
