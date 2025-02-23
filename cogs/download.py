@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
 from utils.catbox import CatboxUploader
+from typing import Dict, List
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
@@ -167,15 +168,18 @@ class DownloadCog(commands.Cog):
 
             # 8. Upload Gofile
             await status_message.edit(content="📤 Uploading files to Gofile...")
-            download_link = await self.uploader.organize_and_upload(media_files)
+            stats, download_link = await self.uploader.organize_and_upload(media_files)
 
             success_embed = discord.Embed(
                 title="✅ Download Ready!",
                 description=(
-                    f"📁 **Total Files:** {sum(len(files) for files in media_files.values())}\n"
+                    f"�� **Total Files:** {stats['total']}\n"
                     f"📊 **Files:**\n"
-                    f"• Images: {len(media_files['Images'])}\n"
-                    f"• Videos: {len(media_files['Videos'])}\n\n"
+                    f"• Images: {stats['types']['Images']}\n"
+                    f"• Videos: {stats['types']['Videos']}\n\n"
+                    f"🎁 **Stats:**\n"
+                    f"• Total: {stats['total']}\n"
+                    f"• Types: {', '.join(f'{media_type}: {count}' for media_type, count in stats['types'].items())}\n\n"
                     f"🔗 **Download Link:**\n{download_link}"
                 ),
                 color=0x2ECC71
