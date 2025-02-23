@@ -4,7 +4,7 @@ import discord
 
 class AnonFilesUploader:
     def __init__(self):
-        self.base_url = "https://api.anonfiles.com/upload"
+        self.base_url = "https://api.anonymfile.com/upload"
 
     async def upload_file(self, file_data: bytes, filename: str) -> str:
         """Upload un fichier"""
@@ -13,12 +13,17 @@ class AnonFilesUploader:
                 data = aiohttp.FormData()
                 data.add_field('file', file_data, filename=filename)
                 
+                print(f"Uploading to: {self.base_url}")
                 async with session.post(self.base_url, data=data) as response:
+                    print(f"Upload response status: {response.status}")
                     if response.status == 200:
                         result = await response.json()
+                        print(f"Upload response: {result}")
                         if result["status"]:
                             return result["data"]["file"]["url"]["short"]
-                    raise Exception(f"Upload failed: {await response.text()}")
+                    response_text = await response.text()
+                    print(f"Error response: {response_text}")
+                    raise Exception(f"Upload failed: {response_text}")
         except Exception as e:
             print(f"Error uploading file: {e}")
             raise
@@ -36,7 +41,7 @@ class AnonFilesUploader:
                     uploaded_files.append(url)
                     print(f"Uploaded {file.filename}")
 
-            # Retourner l'URL du dernier fichier (qui sera un ZIP si multiple)
+            # Retourner l'URL du dernier fichier
             return uploaded_files[-1]
 
         except Exception as e:
