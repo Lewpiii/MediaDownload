@@ -19,42 +19,39 @@ class DownloadCog(commands.Cog):
         token = os.getenv('TOP_GG_TOKEN')
         if not token:
             print("⚠️ TOP_GG_TOKEN not found in environment variables")
-            return False
+            return True  # En cas de problème avec le token, on laisse passer
             
         try:
             print(f"\n=== Vote Check Debug ===")
             print(f"Checking vote for user ID: {user_id}")
-            print(f"Using token: {token[:5]}...{token[-5:]}")  # Affiche partiellement le token pour debug
             
             async with aiohttp.ClientSession() as session:
                 headers = {"Authorization": token}
                 url = f"https://top.gg/api/bots/1332684877551763529/check?userId={user_id}"
                 
-                print(f"Request URL: {url}")
-                print(f"Request headers: {headers}")
-                
+                print(f"Making request to: {url}")
                 async with session.get(url, headers=headers) as response:
                     print(f"Response status: {response.status}")
+                    response_text = await response.text()
+                    print(f"Raw response: {response_text}")
                     
                     if response.status == 200:
-                        data = await response.json()
-                        print(f"Response data: {data}")
-                        has_voted = data.get("voted") == 1
-                        print(f"Has voted: {has_voted}")
-                        return has_voted
-                    elif response.status == 401:
-                        print("❌ Invalid Top.gg token")
-                        return False
+                        try:
+                            data = await response.json()
+                            print(f"Parsed response data: {data}")
+                            has_voted = bool(data.get("voted", 0))
+                            print(f"Has voted: {has_voted}")
+                            return has_voted
+                        except Exception as e:
+                            print(f"Error parsing response: {e}")
+                            return True  # En cas d'erreur de parsing, on laisse passer
                     else:
-                        print(f"❌ Unexpected status code: {response.status}")
-                        return False
+                        print(f"Unexpected status code: {response.status}")
+                        return True  # En cas d'erreur d'API, on laisse passer
                         
-        except aiohttp.ClientError as e:
-            print(f"Network error during vote check: {e}")
-            return False
         except Exception as e:
-            print(f"Unexpected error during vote check: {e}")
-            return False
+            print(f"Error during vote check: {e}")
+            return True  # En cas d'erreur, on laisse passer
 
     async def check_permissions(self, channel: discord.TextChannel) -> bool:
         """Vérifie les permissions du bot dans le channel"""
