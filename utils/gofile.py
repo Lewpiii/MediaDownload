@@ -65,7 +65,7 @@ class GoFileUploader:
                         if data["status"] == "ok":
                             # Sauvegarder le guest token du premier upload
                             if not self.guest_token:
-                                self.guest_token = data["data"]["token"]
+                                self.guest_token = data["data"].get("guestToken")
                                 print(f"Saved guest token: {self.guest_token}")
                             
                             # Pour le premier fichier
