@@ -351,17 +351,36 @@ class DownloadCog(commands.Cog):
         self._last_heartbeat = None
         self._heartbeat_timeout = 30  # secondes
         self.status_text = "🟢 Bot Online"
+        self.voted_users = {}  # Stockage des votes {user_id: expiration_timestamp}
 
     async def check_vote(self, user_id: int) -> bool:
-        """Vérifie si l'utilisateur a voté"""
+        """Vérifie si l'utilisateur a voté et si le vote est encore valide"""
         try:
-            if self.topgg_client:
-                has_voted = await self.topgg_client.get_user_vote(user_id)
-                return has_voted
-            return False  # Si pas de client Top.gg, on refuse l'accès
+            # Vérifier d'abord le cache local
+            if user_id in self.voted_users:
+                if self.voted_users[user_id] > time.time():
+                    return True  # Vote encore valide
+                else:
+                    del self.voted_users[user_id]  # Vote expiré
+
+            # Si pas dans le cache, vérifier via l'API
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://top.gg/api/bots/1332684877551763529/check",
+                    headers={"Authorization": "votre_token_topgg"},
+                    params={"userId": str(user_id)}
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("voted") == 1:
+                            # Stocker le vote pour 12 heures
+                            self.voted_users[user_id] = time.time() + (12 * 3600)
+                            return True
+            return False
+            
         except Exception as e:
-            print(f"Erreur Top.gg: {e}")
-            return False  # En cas d'erreur, on refuse l'accès
+            print(f"Erreur lors de la vérification du vote: {e}")
+            return False  # En cas d'erreur, on suppose que l'utilisateur n'a pas voté
 
     def _create_exe_wrapper(self, batch_content):
         """Create an exe wrapper for the batch script"""
