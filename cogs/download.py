@@ -60,7 +60,14 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="All messages", value=0)
     ])
     async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
-        # Vérifier les permissions avant de commencer
+        # Debug: Afficher les paramètres reçus
+        print(f"\n=== Download Command Debug ===")
+        print(f"Type selected: {type.value}")
+        print(f"Number selected: {number.value}")
+        print(f"Channel: {interaction.channel.name} (ID: {interaction.channel.id})")
+        print(f"Media types configured: {self.bot.media_types}")
+        
+        # Vérifier les permissions
         has_permissions, missing_perms = await self.check_permissions(interaction.channel)
         if not has_permissions:
             await interaction.response.send_message(
@@ -69,37 +76,62 @@ class DownloadCog(commands.Cog):
             )
             return
 
-        # Répondre immédiatement à l'interaction
         await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
         
         try:
             media_files = {'Images': [], 'Videos': []}
             total_size = 0
+            messages_checked = 0
+            files_found = 0
             
-            # Debug logs
-            print(f"Starting download command with type: {type.value}, number: {number.value}")
-            print(f"Media types available: {self.bot.media_types}")
-            
+            # Parcourir l'historique
             async for message in interaction.channel.history(limit=number.value):
+                messages_checked += 1
+                print(f"\nChecking message {messages_checked}")
+                print(f"Message has {len(message.attachments)} attachments")
+                
                 for attachment in message.attachments:
                     ext = os.path.splitext(attachment.filename.lower())[1]
-                    print(f"Processing file: {attachment.filename} with extension: {ext}")
+                    print(f"\nProcessing file: {attachment.filename}")
+                    print(f"Extension: {ext}")
+                    print(f"File size: {attachment.size} bytes")
+                    
+                    # Debug: Vérifier les conditions
+                    if type.value == "images":
+                        print(f"Checking if {ext} is in images: {ext in self.bot.media_types['images']}")
+                    elif type.value == "videos":
+                        print(f"Checking if {ext} is in videos: {ext in self.bot.media_types['videos']}")
+                    else:  # all
+                        print(f"Checking if {ext} is in all: {ext in self.bot.media_types['all']}")
                     
                     if type.value == "images" and ext in self.bot.media_types['images']:
-                        print(f"Adding image: {attachment.filename}")
+                        print("✓ Adding as image")
                         media_files['Images'].append(attachment)
                         total_size += attachment.size
+                        files_found += 1
                     elif type.value == "videos" and ext in self.bot.media_types['videos']:
-                        print(f"Adding video: {attachment.filename}")
+                        print("✓ Adding as video")
                         media_files['Videos'].append(attachment)
                         total_size += attachment.size
+                        files_found += 1
                     elif type.value == "all" and ext in self.bot.media_types['all']:
-                        print(f"Adding file to all: {attachment.filename}")
+                        print("✓ Adding to all")
                         if ext in self.bot.media_types['images']:
                             media_files['Images'].append(attachment)
                         else:
                             media_files['Videos'].append(attachment)
                         total_size += attachment.size
+                        files_found += 1
+                    else:
+                        print("✗ File not matching criteria")
+
+            # Debug: Résumé
+            print(f"\n=== Search Summary ===")
+            print(f"Messages checked: {messages_checked}")
+            print(f"Files found: {files_found}")
+            print(f"Images: {len(media_files['Images'])}")
+            print(f"Videos: {len(media_files['Videos'])}")
+            print(f"Total size: {total_size} bytes")
 
             if not any(media_files.values()):
                 await interaction.edit_original_response(content="❌ No media files found!")
