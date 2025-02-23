@@ -9,6 +9,7 @@ class GoFileUploader:
         self.token = token
         self.base_url = "https://api.gofile.io"
         self.headers = {"Authorization": f"Bearer {token}"} if token else {}
+        self.guest_token = None
 
     async def get_server(self) -> str:
         """Obtient un serveur pour l'upload"""
@@ -31,7 +32,7 @@ class GoFileUploader:
             print(f"Error getting server: {e}")
             raise
 
-    async def upload_file(self, file_data: bytes, filename: str, server: str, folder_id: str = None) -> str:
+    async def upload_file(self, file_data: bytes, filename: str, server: str, folder_id: str = None) -> tuple:
         """Upload un fichier"""
         try:
             async with aiohttp.ClientSession() as session:
@@ -39,6 +40,8 @@ class GoFileUploader:
                 data.add_field('file', file_data, filename=filename)
                 if folder_id:
                     data.add_field('folderId', folder_id)
+                if self.guest_token:
+                    data.add_field('token', self.guest_token)
                 
                 upload_url = f"https://{server}.gofile.io/contents/uploadfile"
                 print(f"Uploading to: {upload_url}")
@@ -49,6 +52,10 @@ class GoFileUploader:
                         data = await response.json()
                         print(f"Upload response data: {data}")
                         if data["status"] == "ok":
+                            # Sauvegarder le guest token du premier upload
+                            if not self.guest_token:
+                                self.guest_token = data["data"]["guestToken"]
+                                print(f"Saved guest token: {self.guest_token}")
                             # Si c'est le premier fichier, on retourne le folderId et l'URL
                             if not folder_id:
                                 return data["data"]["parentFolder"], data["data"]["downloadPage"]
@@ -123,6 +130,7 @@ class GoFileUploader:
             # 2. Upload les fichiers
             folder_id = None
             download_url = None
+            self.guest_token = None
 
             for media_type, files in media_files.items():
                 for file in files:
@@ -133,7 +141,7 @@ class GoFileUploader:
                     if not folder_id:
                         folder_id, download_url = await self.upload_file(file_data, file.filename, server)
                     else:
-                        # Pour les fichiers suivants, on utilise le même folder_id
+                        # Pour les fichiers suivants, on utilise le même folder_id et guest token
                         _, _ = await self.upload_file(file_data, file.filename, server, folder_id)
                     
                     print(f"Uploaded {file.filename} to folder {folder_id}")
