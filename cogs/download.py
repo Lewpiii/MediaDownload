@@ -8,6 +8,7 @@ import zipfile
 import time
 from datetime import datetime
 from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
+from utils.gofile import GoFileUploader
 
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
@@ -151,13 +152,8 @@ class DownloadCog(commands.Cog):
             # Upload vers Gofile
             await interaction.followup.send("📤 Uploading files to Gofile...", ephemeral=True)
             
-            with tempfile.TemporaryDirectory() as temp_dir:
-                for media_type, files in media_files.items():
-                    for file in files:
-                        file_path = os.path.join(temp_dir, file.filename)
-                        await file.save(file_path)
-
-                download_link = await uploader.organize_and_upload(media_files)
+            uploader = GoFileUploader(os.getenv('GOFILE_TOKEN'))
+            download_link = await uploader.organize_and_upload(media_files)
 
             embed = discord.Embed(
                 title="✅ Download Ready!",
@@ -183,82 +179,6 @@ class DownloadCog(commands.Cog):
                         os.unlink(temp_file)
                 except Exception as e:
                     print(f"Error cleaning temp file {temp_file}: {e}")
-
-    @app_commands.command(name="stats", description="Show bot statistics")
-    async def stats(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="📊 Bot Statistics",
-            color=0x3498db
-        )
-        
-        embed.add_field(
-            name="Servers",
-            value=str(len(self.bot.guilds)),
-            inline=True
-        )
-        
-        total_members = sum(g.member_count for g in self.bot.guilds)
-        embed.add_field(
-            name="Users",
-            value=str(total_members),
-            inline=True
-        )
-        
-        embed.add_field(
-            name="Latency",
-            value=f"{round(self.bot.latency * 1000)}ms",
-            inline=True
-        )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="bug", description="Report a bug")
-    async def bug(self, interaction: discord.Interaction, description: str):
-        log_channel = self.bot.get_channel(LOGS_CHANNEL_ID)
-        
-        embed = discord.Embed(
-            title="🐛 Bug Report",
-            description=description,
-            color=0xFF0000,
-            timestamp=datetime.utcnow()
-        )
-        
-        embed.add_field(
-            name="Reported by",
-            value=f"{interaction.user} (ID: {interaction.user.id})"
-        )
-        
-        embed.add_field(
-            name="Server",
-            value=f"{interaction.guild.name} (ID: {interaction.guild.id})"
-        )
-        
-        await log_channel.send(embed=embed)
-        await interaction.response.send_message("✅ Bug report sent! Thank you for your feedback.", ephemeral=True)
-
-    @app_commands.command(name="suggest", description="Submit a suggestion")
-    async def suggest(self, interaction: discord.Interaction, suggestion: str):
-        log_channel = self.bot.get_channel(LOGS_CHANNEL_ID)
-        
-        embed = discord.Embed(
-            title="💡 Suggestion",
-            description=suggestion,
-            color=0x00FF00,
-            timestamp=datetime.utcnow()
-        )
-        
-        embed.add_field(
-            name="Suggested by",
-            value=f"{interaction.user} (ID: {interaction.user.id})"
-        )
-        
-        embed.add_field(
-            name="Server",
-            value=f"{interaction.guild.name} (ID: {interaction.guild.id})"
-        )
-        
-        await log_channel.send(embed=embed)
-        await interaction.response.send_message("✅ Suggestion sent! Thank you for your feedback.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
