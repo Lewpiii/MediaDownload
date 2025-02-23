@@ -90,12 +90,12 @@ class DownloadCog(commands.Cog):
             # 1. Répondre immédiatement
             await interaction.response.defer()
             
-            # 2. Initialisation
+            # 2. Premier message de status
+            status_message = await interaction.followup.send("🔍 Searching for media...", wait=True)
+            
+            # 3. Initialisation
             media_files = {'Images': [], 'Videos': []}
             total_size = 0
-            
-            # 3. Premier message de status
-            status_message = await interaction.followup.send("🔍 Searching for media...", wait=True)
             
             # 4. Parcourir les messages
             async for message in interaction.channel.history(limit=number.value or None):
@@ -143,7 +143,7 @@ class DownloadCog(commands.Cog):
             # 7. Sinon, vérifier le vote
             has_voted = await self.check_vote(interaction.user.id)
             if not has_voted:
-                embed = discord.Embed(
+                vote_embed = discord.Embed(
                     title="⚠️ Vote Required",
                     description=(
                         "You need to vote for the bot to download large files!\n\n"
@@ -155,12 +155,16 @@ class DownloadCog(commands.Cog):
                         "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
                         "✨ **Free Features**\n"
                         "• Download files up to 25MB\n"
-                        "• Direct ZIP downloads\n"
+                        "• Direct ZIP downloads\n\n"
+                        "🎁 **Premium Features** (after voting)\n"
+                        "• Download files of any size\n"
+                        "• Organize files by category\n"
+                        "• Permanent download links"
                     ),
                     color=0xFF0000
                 )
-                embed.set_footer(text="Your vote lasts 12 hours!")
-                await status_message.edit(embed=embed)
+                vote_embed.set_footer(text="Your vote lasts 12 hours!")
+                await status_message.edit(content=None, embed=vote_embed)
                 return
 
             # 8. Upload Gofile
@@ -168,7 +172,7 @@ class DownloadCog(commands.Cog):
             uploader = GoFileUploader(os.getenv('GOFILE_TOKEN'))
             download_link = await uploader.organize_and_upload(media_files)
 
-            embed = discord.Embed(
+            success_embed = discord.Embed(
                 title="✅ Download Ready!",
                 description=(
                     f"📁 **Total Files:** {sum(len(files) for files in media_files.values())}\n"
@@ -179,7 +183,7 @@ class DownloadCog(commands.Cog):
                 ),
                 color=0x2ECC71
             )
-            await status_message.edit(embed=embed)
+            await status_message.edit(content=None, embed=success_embed)
 
         except Exception as e:
             print(f"Error in download_media: {e}")
