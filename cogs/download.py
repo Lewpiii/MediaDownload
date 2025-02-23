@@ -166,7 +166,7 @@ class DownloadCog(commands.Cog):
 
             # 8. Upload Gofile
             await status_message.edit(content="📤 Uploading files to Gofile...")
-            uploader = GoFileUploader(os.getenv('GOFILE_TOKEN'))
+            uploader = GoFileUploader()
             download_link = await uploader.organize_and_upload(media_files)
 
             success_embed = discord.Embed(
