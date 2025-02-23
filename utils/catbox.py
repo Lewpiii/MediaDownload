@@ -1,30 +1,28 @@
 import aiohttp
 from typing import Dict, List, Tuple
 import discord
-import json
 
-class PixelDrainUploader:
+class CatboxUploader:
     def __init__(self):
-        self.base_url = "https://pixeldrain.com/api"
+        self.upload_url = "https://catbox.moe/user/api.php"
 
     async def upload_file(self, file_data: bytes, filename: str) -> str:
         """Upload un fichier"""
         try:
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
-                data.add_field('file', file_data, filename=filename)
+                data.add_field('reqtype', 'fileupload')
+                data.add_field('userhash', '')  # Pas besoin de hash pour upload anonyme
+                data.add_field('fileToUpload', file_data, filename=filename)
                 
                 print(f"Uploading file: {filename}")
-                upload_url = f"{self.base_url}/file"  # Endpoint public
                 
-                async with session.post(upload_url, data=data) as response:
+                async with session.post(self.upload_url, data=data) as response:
                     print(f"Upload response status: {response.status}")
-                    if response.status in [200, 201]:
-                        result = await response.json()
-                        print(f"Upload response: {result}")
-                        file_id = result.get('id')
-                        if file_id:
-                            return f"https://pixeldrain.com/u/{file_id}"
+                    if response.status == 200:
+                        url = await response.text()
+                        print(f"Upload response: {url}")
+                        return url
                     response_text = await response.text()
                     print(f"Error response: {response_text}")
                     raise Exception(f"Upload failed: {response_text}")
