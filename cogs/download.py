@@ -66,23 +66,17 @@ class DownloadCog(commands.Cog):
         print(f"Number selected: {number.value}")
         print(f"Channel: {interaction.channel.name} (ID: {interaction.channel.id})")
         print(f"Media types configured: {self.bot.media_types}")
-        
-        # Vérifier les permissions
-        has_permissions, missing_perms = await self.check_permissions(interaction.channel)
-        if not has_permissions:
-            await interaction.response.send_message(
-                f"❌ Missing required permissions: {', '.join(missing_perms)}",
-                ephemeral=True
-            )
-            return
 
-        await interaction.response.send_message("🔍 Searching for media...", ephemeral=True)
-        
         try:
+            # Répondre immédiatement avec defer
+            await interaction.response.defer(ephemeral=True)
+            
             media_files = {'Images': [], 'Videos': []}
             total_size = 0
             messages_checked = 0
             files_found = 0
+            
+            await interaction.followup.send("🔍 Searching for media...", ephemeral=True)
             
             # Parcourir l'historique
             async for message in interaction.channel.history(limit=number.value):
@@ -134,12 +128,12 @@ class DownloadCog(commands.Cog):
             print(f"Total size: {total_size} bytes")
 
             if not any(media_files.values()):
-                await interaction.edit_original_response(content="❌ No media files found!")
+                await interaction.followup.send("❌ No media files found!", ephemeral=True)
                 return
 
             # Si taille totale < 25MB, envoi direct en ZIP
             if total_size < MAX_DIRECT_DOWNLOAD_SIZE:
-                await interaction.edit_original_response(content="📦 Preparing your files...")
+                await interaction.followup.send("📦 Preparing your files...", ephemeral=True)
                 temp_zip = None
                 try:
                     temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
@@ -150,9 +144,9 @@ class DownloadCog(commands.Cog):
                                 file_data = await file.read()
                                 zf.writestr(f"{media_type}/{file.filename}", file_data)
 
-                    await interaction.edit_original_response(
-                        content="📦 Here are your files:",
-                        attachments=[discord.File(temp_zip.name, 'media_files.zip')]
+                    await interaction.followup.send(
+                        "📦 Here are your files:",
+                        file=discord.File(temp_zip.name, 'media_files.zip')
                     )
                 finally:
                     if temp_zip and os.path.exists(temp_zip.name):
@@ -179,11 +173,11 @@ class DownloadCog(commands.Cog):
                     color=0xFF0000
                 )
                 embed.set_footer(text="Your vote lasts 12 hours!")
-                await interaction.edit_original_response(embed=embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
             # Upload vers Gofile
-            await interaction.edit_original_response(content="📤 Uploading files to Gofile...")
+            await interaction.followup.send("📤 Uploading files to Gofile...", ephemeral=True)
             
             uploader = GoFileUploader(os.getenv('GOFILE_TOKEN'))
             download_link = await uploader.organize_and_upload(media_files)
@@ -199,11 +193,14 @@ class DownloadCog(commands.Cog):
                 ),
                 color=0x2ECC71
             )
-            await interaction.edit_original_response(embed=embed)
+            await interaction.followup.send(embed=embed)
 
         except Exception as e:
             print(f"Error in download_media: {e}")
-            await interaction.edit_original_response(content=f"❌ An error occurred: {str(e)}")
+            try:
+                await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            except:
+                print("Failed to send error message")
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
