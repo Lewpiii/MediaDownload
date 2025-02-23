@@ -71,14 +71,13 @@ class GoFileUploader:
             print(f"Error uploading file: {e}")
             raise
 
-    async def create_folder(self, folder_name: str, parent_id: str = None) -> Dict[str, Any]:
+    async def create_folder(self, folder_name: str) -> Dict[str, Any]:
         """Crée un nouveau dossier"""
         try:
             async with aiohttp.ClientSession() as session:
                 data = {
-                    "token": self.token,
+                    "token": self.guest_token,
                     "folderName": folder_name,
-                    "parentFolderId": parent_id
                 }
                 async with session.put(f"{self.base_url}/createFolder", json=data) as response:
                     if response.status == 200:
@@ -132,28 +131,28 @@ class GoFileUploader:
             server = await self.get_server()
             print(f"Using server: {server}")
 
-            # 2. Upload les fichiers
-            folder_id = None
-            download_url = None
-            self.guest_token = None
+            # 2. Upload le premier fichier pour obtenir le guest token
+            first_file = next(iter(media_files.values()))[0]
+            file_data = await first_file.read()
+            folder_id, download_url = await self.upload_file(file_data, first_file.filename, server)
+            print(f"First file uploaded, got folder_id: {folder_id}")
 
+            # 3. Créer un nouveau dossier avec le guest token
+            folder_name = "media_collection"
+            folder_info = await self.create_folder(folder_name)
+            new_folder_id = folder_info["id"]
+            print(f"Created new folder with ID: {new_folder_id}")
+
+            # 4. Upload tous les fichiers dans le nouveau dossier
             for media_type, files in media_files.items():
                 for file in files:
-                    print(f"Processing file: {file.filename}")
-                    file_data = await file.read()
-                    
-                    # Pour le premier fichier, on récupère le parentFolder
-                    if not folder_id:
-                        folder_id, download_url = await self.upload_file(file_data, file.filename, server)
-                    else:
-                        # Pour les fichiers suivants, on utilise le même parentFolder
-                        _, _ = await self.upload_file(file_data, file.filename, server, folder_id)
-                    
-                    print(f"Uploaded {file.filename} to folder {folder_id}")
+                    if file != first_file:  # Skip the first file as it's already uploaded
+                        print(f"Processing file: {file.filename}")
+                        file_data = await file.read()
+                        _, _ = await self.upload_file(file_data, file.filename, server, new_folder_id)
+                        print(f"Uploaded {file.filename} to folder {new_folder_id}")
 
-            if not download_url:
-                raise Exception("No files were uploaded successfully")
-            return download_url
+            return f"https://gofile.io/d/{new_folder_id}"
 
         except Exception as e:
             print(f"Error in organize_and_upload: {e}")
