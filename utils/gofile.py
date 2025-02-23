@@ -42,16 +42,22 @@ class GoFileUploader:
                 
                 # Ajout des paramètres optionnels
                 if folder_id:
-                    data.add_field('parentFolderCode', folder_id)  # Utiliser parentFolderCode
+                    data.add_field('folderId', folder_id)
                 if self.guest_token:
                     data.add_field('token', self.guest_token)
                 
-                upload_url = f"https://{server}.gofile.io/contents/uploadfile"
+                # Utilisation de l'API v2 de GoFile
+                upload_url = f"https://{server}.gofile.io/uploadFile"
+                headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'multipart/form-data'
+                }
+                
                 print(f"Uploading to: {upload_url}")
                 print(f"Using folder_id: {folder_id}")
                 print(f"Using guest_token: {self.guest_token}")
                 
-                async with session.post(upload_url, data=data) as response:
+                async with session.post(upload_url, data=data, headers=headers) as response:
                     print(f"Upload response status: {response.status}")
                     if response.status == 200:
                         data = await response.json()
@@ -61,15 +67,43 @@ class GoFileUploader:
                             if not self.guest_token:
                                 self.guest_token = data["data"]["guestToken"]
                                 print(f"Saved guest token: {self.guest_token}")
-                            # Si c'est le premier fichier, on retourne le parentFolderCode
+                            
+                            # Pour le premier fichier
                             if not folder_id:
-                                return data["data"]["parentFolderCode"], data["data"]["downloadPage"]
+                                # Créer un nouveau dossier pour regrouper les fichiers
+                                folder_data = await self.create_folder(data["data"]["guestToken"], "media_collection")
+                                if folder_data:
+                                    return folder_data["id"], data["data"]["downloadPage"]
                             return None, data["data"]["downloadPage"]
                     response_text = await response.text()
                     raise Exception(f"File upload failed: {response_text}")
         except Exception as e:
             print(f"Error uploading file: {e}")
             raise
+
+    async def create_folder(self, token: str, folder_name: str) -> Dict[str, Any]:
+        """Crée un nouveau dossier"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = "https://api.gofile.io/createFolder"
+                headers = {
+                    'Authorization': f'Bearer {token}',
+                    'Content-Type': 'application/json'
+                }
+                data = {
+                    "parentFolderId": None,
+                    "folderName": folder_name
+                }
+                
+                async with session.post(url, json=data, headers=headers) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result["status"] == "ok":
+                            return result["data"]
+                    raise Exception(f"Failed to create folder: {await response.text()}")
+        except Exception as e:
+            print(f"Error creating folder: {e}")
+            return None
 
     @staticmethod
     def detect_category(filename: str) -> str:
