@@ -198,7 +198,9 @@ class DownloadCog(commands.Cog):
                         
                         # Upload via Catbox pour les gros fichiers
                         await status_message.edit(content="📤 Uploading files...")
-                        stats, download_link = await self.uploader.upload_file(filename=temp_zip.name)
+                        with open(temp_zip.name, 'rb') as file:
+                            filedata = file.read()
+                            stats, download_link = await self.uploader.upload_file(filedata=filedata)
                         
                         # Afficher le résultat
                         success_embed = discord.Embed(
