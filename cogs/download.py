@@ -201,8 +201,8 @@ class DownloadCog(commands.Cog):
                         with open(temp_zip.name, 'rb') as file:
                             file_content = file.read()
                             stats, download_link = await self.uploader.upload_file(
-                                filename=zip_filename,
-                                file_content=file_content
+                                zip_filename,
+                                file_content
                             )
                         
                         # Afficher le résultat
