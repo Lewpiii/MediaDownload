@@ -200,7 +200,10 @@ class DownloadCog(commands.Cog):
                         await status_message.edit(content="📤 Uploading files...")
                         with open(temp_zip.name, 'rb') as file:
                             file_content = file.read()
-                            stats, download_link = await self.uploader.upload_file(file_content)
+                            stats, download_link = await self.uploader.upload_file(
+                                filename=zip_filename,
+                                file_content=file_content
+                            )
                         
                         # Afficher le résultat
                         success_embed = discord.Embed(
