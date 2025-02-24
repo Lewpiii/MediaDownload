@@ -87,123 +87,151 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="🎥 Videos", value="videos"),
         app_commands.Choice(name="📁 All", value="all")
     ])
-    @app_commands.choices(number=[
-        app_commands.Choice(name="Last 10 messages", value=10),
-        app_commands.Choice(name="Last 20 messages", value=20),
-        app_commands.Choice(name="Last 50 messages", value=50),
-        app_commands.Choice(name="All messages", value=0)
-    ])
-    async def download_media(self, interaction: discord.Interaction, type: app_commands.Choice[str], number: app_commands.Choice[int]):
+    async def download_media(
+        self, 
+        interaction: discord.Interaction, 
+        type: str,  # Changé de app_commands.Choice[str] à str pour éviter les erreurs de conversion
+        messages: int = 100
+    ):
         try:
-            # 1. Répondre immédiatement
+            print(f"[DEBUG] Starting download - Type: {type}, Messages: {messages}, Channel: {interaction.channel.name}")
             await interaction.response.defer()
             
-            # 2. Premier message de status
             status_message = await interaction.followup.send("🔍 Searching for media...", wait=True)
             
-            # 3. Initialisation
-            media_files = {'Images': [], 'Videos': []}
-            total_size = 0
+            # Validation des entrées
+            if messages < 0:
+                messages = 100
+            limit = None if messages == 0 else messages
             
-            # 4. Parcourir les messages
-            async for message in interaction.channel.history(limit=number.value or None):
-                for attachment in message.attachments:
-                    ext = os.path.splitext(attachment.filename.lower())[1]
+            print(f"[DEBUG] Scanning {limit if limit else 'all'} messages")
+            
+            timestamp = int(time.time())
+            zip_filename = f'media_files_{timestamp}.zip'
+            
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+                with zipfile.ZipFile(temp_zip.name, 'w') as zf:
+                    total_files = 0
+                    total_size = 0
                     
-                    if type.value == "images" and ext in self.bot.media_types['images']:
-                        media_files['Images'].append(attachment)
-                        total_size += attachment.size
-                    elif type.value == "videos" and ext in self.bot.media_types['videos']:
-                        media_files['Videos'].append(attachment)
-                        total_size += attachment.size
-                    elif type.value == "all" and ext in self.bot.media_types['all']:
-                        if ext in self.bot.media_types['images']:
-                            media_files['Images'].append(attachment)
-                        else:
-                            media_files['Videos'].append(attachment)
-                        total_size += attachment.size
+                    try:
+                        async for message in interaction.channel.history(limit=limit):
+                            for attachment in message.attachments:
+                                ext = os.path.splitext(attachment.filename.lower())[1]
+                                
+                                # Vérifier le type de fichier
+                                valid_file = False
+                                if type == "images" and ext in self.bot.media_types['images']:
+                                    valid_file = True
+                                elif type == "videos" and ext in self.bot.media_types['videos']:
+                                    valid_file = True
+                                elif type == "all" and ext in self.bot.media_types['all']:
+                                    valid_file = True
+                                
+                                if valid_file:
+                                    print(f"[DEBUG] Processing file: {attachment.filename}")
+                                    try:
+                                        file_data = await attachment.read()
+                                        folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
+                                        zip_path = f"{folder}/{attachment.filename}"
+                                        
+                                        zf.writestr(zip_path, file_data)
+                                        
+                                        total_files += 1
+                                        total_size += len(file_data)
+                                        
+                                        if total_files % 5 == 0:
+                                            await status_message.edit(
+                                                content=f"📥 Downloading... Found {total_files} files ({format_size(total_size)})"
+                                            )
+                                    except Exception as e:
+                                        print(f"[ERROR] Failed to process file {attachment.filename}: {str(e)}")
+                                        continue
+                    
+                    except Exception as e:
+                        print(f"[ERROR] Error during message history scanning: {str(e)}")
+                        await status_message.edit(content="❌ An error occurred while scanning messages.")
+                        return
 
-            # 5. Vérifier si des fichiers ont été trouvés
-            if not any(media_files.values()):
-                await status_message.edit(content="❌ No media files found!")
-                return
+                    print(f"[DEBUG] Download complete. Total files: {total_files}, Size: {total_size}")
 
-            # 6. Envoi direct si < 25MB
-            if total_size < MAX_DIRECT_DOWNLOAD_SIZE:
-                await status_message.edit(content="📦 Preparing your files...")
-                
-                with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
-                    with zipfile.ZipFile(temp_zip.name, 'w') as zf:
-                        for media_type, files in media_files.items():
-                            for file in files:
-                                file_data = await file.read()
-                                zf.writestr(f"{media_type}/{file.filename}", file_data)
-                    
-                    await interaction.followup.send(
-                        "📦 Here are your files:",
-                        file=discord.File(temp_zip.name, 'media_files.zip')
-                    )
-                    
+                    if total_files == 0:
+                        await status_message.edit(content="❌ No media files found!")
+                        os.unlink(temp_zip.name)
+                        return
+
+                    # Vérifier la taille totale
+                    if total_size < MAX_DIRECT_DOWNLOAD_SIZE:
+                        await status_message.edit(content="📦 Preparing your files...")
+                        await interaction.followup.send(
+                            "📦 Here are your files:",
+                            file=discord.File(temp_zip.name, zip_filename)
+                        )
+                    else:
+                        # Gérer les gros fichiers avec le système de vote existant
+                        has_voted = await self.check_vote(interaction.user.id)
+                        if not has_voted:
+                            vote_embed = discord.Embed(
+                                title="⚠️ Vote Required",
+                                description=(
+                                    "You need to vote for the bot to download large files!\n\n"
+                                    "📝 **Why vote?**\n"
+                                    "• Support the bot\n"
+                                    "• Get access to all features\n"
+                                    "• Help us grow\n\n"
+                                    "🔗 **Vote Link**\n"
+                                    "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
+                                    "✨ **Free Features**\n"
+                                    "• Download files up to 25MB\n"
+                                    "• Direct ZIP downloads\n\n"
+                                    "🎁 **Premium Features** (after voting)\n"
+                                    "• Download files of any size\n"
+                                    "• Organize files by category\n"
+                                    "• Permanent download links"
+                                ),
+                                color=0xFF0000
+                            )
+                            vote_embed.set_footer(text="Your vote lasts 12 hours!")
+                            await status_message.edit(content=None, embed=vote_embed)
+                            os.unlink(temp_zip.name)
+                            return
+                        
+                        # Upload via Catbox pour les gros fichiers
+                        await status_message.edit(content="📤 Uploading files...")
+                        stats, download_link = await self.uploader.upload_file(temp_zip.name)
+                        
+                        # Afficher le résultat
+                        success_embed = discord.Embed(
+                            title="✅ Download Ready!",
+                            description=(
+                                f"📁 Total: {stats['total']} files ({format_size(stats['total_size'])})\n"
+                                f"📊 By Type:\n"
+                                f"• Images: {stats['types']['Images']['count']} files ({format_size(stats['types']['Images']['size'])})\n"
+                                f"• Videos: {stats['types']['Videos']['count']} files ({format_size(stats['types']['Videos']['size'])})\n\n"
+                                f"🎁 **Stats:**\n"
+                                f"• Total: {stats['total']}\n"
+                                f"• Types: {', '.join(f'{media_type}: {count}' for media_type, count in stats['types'].items())}\n\n"
+                                f"📑 Details:\n"
+                                f"• Images: {stats['types']['Images']['count']} files ({format_size(stats['types']['Images']['size'])})\n"
+                                f"• Videos: {stats['types']['Videos']['count']} files ({format_size(stats['types']['Videos']['size'])})\n"
+                            ),
+                            color=0x2ECC71
+                        )
+                        success_embed.add_field(name="🔗 Download Link:", value=download_link)
+                        await status_message.edit(content=None, embed=success_embed)
+
                     # Nettoyage
                     os.unlink(temp_zip.name)
-                return
-
-            # 7. Sinon, vérifier le vote
-            has_voted = await self.check_vote(interaction.user.id)
-            if not has_voted:
-                vote_embed = discord.Embed(
-                    title="⚠️ Vote Required",
-                    description=(
-                        "You need to vote for the bot to download large files!\n\n"
-                        "📝 **Why vote?**\n"
-                        "• Support the bot\n"
-                        "• Get access to all features\n"
-                        "• Help us grow\n\n"
-                        "🔗 **Vote Link**\n"
-                        "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
-                        "✨ **Free Features**\n"
-                        "• Download files up to 25MB\n"
-                        "• Direct ZIP downloads\n\n"
-                        "🎁 **Premium Features** (after voting)\n"
-                        "• Download files of any size\n"
-                        "• Organize files by category\n"
-                        "• Permanent download links"
-                    ),
-                    color=0xFF0000
-                )
-                vote_embed.set_footer(text="Your vote lasts 12 hours!")
-                await status_message.edit(content=None, embed=vote_embed)
-                return
-
-            # 8. Upload Gofile
-            await status_message.edit(content="📤 Uploading files...")
-            stats, download_link = await self.uploader.organize_and_upload(media_files)
-
-            success_embed = discord.Embed(
-                title="✅ Download Ready!",
-                description=(
-                    f"📁 Total: {stats['total']} files ({format_size(stats['total_size'])})\n"
-                    f"📊 By Type:\n"
-                    f"• Images: {stats['types']['Images']['count']} files ({format_size(stats['types']['Images']['size'])})\n"
-                    f"• Videos: {stats['types']['Videos']['count']} files ({format_size(stats['types']['Videos']['size'])})\n\n"
-                    f"🎁 **Stats:**\n"
-                    f"• Total: {stats['total']}\n"
-                    f"• Types: {', '.join(f'{media_type}: {count}' for media_type, count in stats['types'].items())}\n\n"
-                    f"📑 Details:\n"
-                    f"• Images: {stats['types']['Images']['count']} files ({format_size(stats['types']['Images']['size'])})\n"
-                    f"• Videos: {stats['types']['Videos']['count']} files ({format_size(stats['types']['Videos']['size'])})\n"
-                ),
-                color=0x2ECC71
-            )
-            success_embed.add_field(name="🔗 Download Link:", value=download_link)
-            await status_message.edit(content=None, embed=success_embed)
 
         except Exception as e:
-            print(f"Error in download_media: {e}")
+            print(f"[ERROR] Critical error in download_media: {str(e)}")
             try:
                 await status_message.edit(content=f"❌ An error occurred: {str(e)}")
             except:
-                print("Failed to send error message")
+                print("[ERROR] Failed to send error message")
+            
+            if 'temp_zip' in locals() and os.path.exists(temp_zip.name):
+                os.unlink(temp_zip.name)
 
     @app_commands.command(name="checkvote", description="Check your vote status")
     async def check_vote_status(self, interaction: discord.Interaction):
