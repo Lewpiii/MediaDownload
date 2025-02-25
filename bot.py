@@ -163,6 +163,12 @@ class MediaDownloadBot(commands.Bot):
         else:
             print("✗ Log channel not found!")
 
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} command(s)")
+        except Exception as e:
+            print(f"Failed to sync commands: {e}")
+
     async def status_check(self):
         """Vérifie périodiquement l'état du bot"""
         await self.wait_until_ready()
