@@ -333,5 +333,21 @@ class DownloadCog(commands.Cog):
             await ctx.send(f"❌ Une erreur est survenue: {str(e)}")
             print(f"Error in download command: {e}")
 
+    async def upload_file(self, filename: str, content: bytes):
+        """Upload a file to the configured service"""
+        try:
+            # Ensure filename is str
+            if isinstance(filename, bytes):
+                filename = filename.decode('utf-8')
+            
+            # Ensure content is bytes
+            if not isinstance(content, bytes):
+                content = bytes(content)
+                
+            return await self.uploader.upload_file(filename, content)
+        except Exception as e:
+            print(f"Error uploading file: {str(e)}")
+            raise
+
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 

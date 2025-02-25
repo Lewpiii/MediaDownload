@@ -1,5 +1,4 @@
 from discord.ext import commands
-from utils.anonfiles import AnonFilesUploader
 import discord
 from typing import Dict, List
 import os
@@ -7,7 +6,6 @@ import os
 class Media(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.uploader = AnonFilesUploader()
 
     @commands.Cog.listener()
     async def on_ready(self):
