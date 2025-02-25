@@ -88,6 +88,11 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="🎥 Videos", value="videos"),
         app_commands.Choice(name="📁 All", value="all")
     ])
+    @app_commands.choices(messages=[  # 0 signifiera "all"
+        app_commands.Choice(name="Last 100", value=100),
+        app_commands.Choice(name="Last 1000", value=1000),
+        app_commands.Choice(name="All messages", value=0)
+    ])
     async def download_media(
         self, 
         interaction: discord.Interaction, 
@@ -100,10 +105,8 @@ class DownloadCog(commands.Cog):
             
             status_message = await interaction.followup.send("🔍 Analyzing messages...", wait=True)
             
-            # Validation des entrées
-            if messages < 0:
-                messages = 100
-            limit = None if messages == 0 else messages
+            # Convertir messages en limite
+            limit = None if messages == 0 else messages  # Si 0, pas de limite (all messages)
 
             # Première passe : compter les fichiers et la taille totale
             total_files = 0
