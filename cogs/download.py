@@ -186,10 +186,9 @@ class DownloadCog(commands.Cog):
                                 # Envoyer le lot actuel
                                 if total_size >= MAX_DIRECT_DOWNLOAD_SIZE:
                                     with open(temp_zip.name, 'rb') as f:
-                                        stats, download_link = await self.uploader.upload_file(
-                                            f"media_files_part{batch_number}.zip",
-                                            f.read()
-                                        )
+                                        file_content = f.read()
+                                        zip_name = f"media_files_part{batch_number}.zip"
+                                        stats, download_link = await self.uploader.upload_file(zip_name, file_content)
                                     await interaction.followup.send(f"📦 Part {batch_number}: {download_link}")
                                 else:
                                     await interaction.followup.send(
@@ -214,10 +213,9 @@ class DownloadCog(commands.Cog):
                     zip_file.close()
                     if total_size >= MAX_DIRECT_DOWNLOAD_SIZE:
                         with open(temp_zip.name, 'rb') as f:
-                            stats, download_link = await self.uploader.upload_file(
-                                f"media_files_part{batch_number}.zip",
-                                f.read()
-                            )
+                            file_content = f.read()
+                            zip_name = f"media_files_part{batch_number}.zip"
+                            stats, download_link = await self.uploader.upload_file(zip_name, file_content)
                         await interaction.followup.send(f"📦 Part {batch_number} (final): {download_link}")
                     else:
                         await interaction.followup.send(
