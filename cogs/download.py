@@ -11,6 +11,7 @@ from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
 from utils.catbox import CatboxUploader
 from typing import Dict, List
 import asyncio
+import aiofiles
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
@@ -356,26 +357,32 @@ class DownloadCog(commands.Cog):
             raise
 
     async def send_large_file(self, interaction, file_path):
-        """Send a large file in chunks."""
+        """Send a large file in chunks using streaming."""
         MAX_FILE_SIZE = 8 * 1024 * 1024  # 8 MB
         file_size = os.path.getsize(file_path)
 
         if file_size <= MAX_FILE_SIZE:
             await interaction.followup.send(file=discord.File(file_path))
         else:
-            # Diviser le fichier en morceaux
-            with open(file_path, 'rb') as f:
-                part_number = 1
+            # Envoyer le fichier en streaming
+            async with aiofiles.open(file_path, 'rb') as f:
+                chunk_number = 1
                 while True:
-                    chunk = f.read(MAX_FILE_SIZE)
+                    chunk = await f.read(MAX_FILE_SIZE)
                     if not chunk:
                         break
-                    chunk_file_path = f"{file_path}.part{part_number}"
-                    with open(chunk_file_path, 'wb') as chunk_file:
-                        chunk_file.write(chunk)
+                    
+                    # Créer un fichier temporaire pour chaque chunk
+                    chunk_file_path = f"{file_path}.part{chunk_number}"
+                    async with aiofiles.open(chunk_file_path, 'wb') as chunk_file:
+                        await chunk_file.write(chunk)
+                    
+                    # Envoyer le chunk
                     await interaction.followup.send(file=discord.File(chunk_file_path))
-                    part_number += 1
-                    os.remove(chunk_file_path)  # Supprimer le fichier temporaire après l'envoi
+                    chunk_number += 1
+                    
+                    # Supprimer le fichier temporaire après l'envoi
+                    os.remove(chunk_file_path)
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
