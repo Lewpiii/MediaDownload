@@ -361,31 +361,66 @@ class DownloadCog(commands.Cog):
 
     async def send_large_file(self, interaction, file_path):
         """Send a large file in chunks using streaming."""
-        MAX_FILE_SIZE = 8 * 1024 * 1024  # 8 MB
-        file_size = os.path.getsize(file_path)
+        CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB chunks
+        MAX_RETRIES = 3
+        
+        try:
+            file_size = os.path.getsize(file_path)
+            
+            # Si le fichier est petit, l'envoyer directement
+            if file_size <= CHUNK_SIZE:
+                await interaction.followup.send(file=discord.File(file_path))
+                return
 
-        if file_size <= MAX_FILE_SIZE:
-            await interaction.followup.send(file=discord.File(file_path))
-        else:
-            # Envoyer le fichier en streaming
+            # Pour les gros fichiers, utiliser le streaming
             async with aiofiles.open(file_path, 'rb') as f:
                 chunk_number = 1
+                total_chunks = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+                
                 while True:
-                    chunk = await f.read(MAX_FILE_SIZE)
+                    chunk = await f.read(CHUNK_SIZE)
                     if not chunk:
                         break
+                        
+                    # Créer un fichier temporaire pour le chunk
+                    temp_path = f"{file_path}.part{chunk_number}"
+                    try:
+                        async with aiofiles.open(temp_path, 'wb') as temp_file:
+                            await temp_file.write(chunk)
+                        
+                        # Envoyer avec retry en cas d'erreur
+                        for attempt in range(MAX_RETRIES):
+                            try:
+                                await interaction.followup.send(
+                                    content=f"Sending part {chunk_number}/{total_chunks}...",
+                                    file=discord.File(temp_path)
+                                )
+                                break
+                            except Exception as e:
+                                if attempt == MAX_RETRIES - 1:
+                                    raise
+                                await asyncio.sleep(1)
+                                
+                    finally:
+                        # Nettoyer le fichier temporaire
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
                     
-                    # Créer un fichier temporaire pour chaque chunk
-                    chunk_file_path = f"{file_path}.part{chunk_number}"
-                    async with aiofiles.open(chunk_file_path, 'wb') as chunk_file:
-                        await chunk_file.write(chunk)
-                    
-                    # Envoyer le chunk
-                    await interaction.followup.send(file=discord.File(chunk_file_path))
                     chunk_number += 1
                     
-                    # Supprimer le fichier temporaire après l'envoi
-                    os.remove(chunk_file_path)
+                    # Libérer la mémoire explicitement
+                    del chunk
+                    await asyncio.sleep(0.5)  # Petit délai entre les chunks
+                    
+        except Exception as e:
+            print(f"Error in send_large_file: {e}")
+            raise
+        finally:
+            # S'assurer que tous les fichiers temporaires sont nettoyés
+            for i in range(1, chunk_number):
+                temp_path = f"{file_path}.part{i}"
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
