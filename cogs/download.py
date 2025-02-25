@@ -355,5 +355,27 @@ class DownloadCog(commands.Cog):
             print(f"Error uploading file: {str(e)}")
             raise
 
+    async def send_large_file(self, interaction, file_path):
+        """Send a large file in chunks."""
+        MAX_FILE_SIZE = 8 * 1024 * 1024  # 8 MB
+        file_size = os.path.getsize(file_path)
+
+        if file_size <= MAX_FILE_SIZE:
+            await interaction.followup.send(file=discord.File(file_path))
+        else:
+            # Diviser le fichier en morceaux
+            with open(file_path, 'rb') as f:
+                part_number = 1
+                while True:
+                    chunk = f.read(MAX_FILE_SIZE)
+                    if not chunk:
+                        break
+                    chunk_file_path = f"{file_path}.part{part_number}"
+                    with open(chunk_file_path, 'wb') as chunk_file:
+                        chunk_file.write(chunk)
+                    await interaction.followup.send(file=discord.File(chunk_file_path))
+                    part_number += 1
+                    os.remove(chunk_file_path)  # Supprimer le fichier temporaire après l'envoi
+
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
