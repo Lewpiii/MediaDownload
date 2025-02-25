@@ -230,8 +230,14 @@ class DownloadCog(commands.Cog):
                 os.unlink(temp_zip.name)
 
         except Exception as e:
-            print(f"[ERROR] Critical error in download_media: {str(e)}")
-            await status_message.edit(content=f"❌ An error occurred: {str(e)}")
+            # Vérifiez si le message existe avant de tenter de le modifier
+            if status_message:
+                try:
+                    await status_message.edit(content=f"❌ An error occurred: {str(e)}")
+                except Exception as edit_error:
+                    print(f"Failed to edit status message: {str(edit_error)}")
+            else:
+                print("Status message does not exist.")
 
     @app_commands.command(name="checkvote", description="Check your vote status")
     async def check_vote_status(self, interaction: discord.Interaction):
