@@ -13,6 +13,7 @@ from typing import Dict, List
 import asyncio
 import aiofiles
 import shutil
+import typing
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
@@ -25,6 +26,11 @@ def format_size(size_bytes: int) -> str:
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.bot.media_types = {
+            'images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+            'videos': ['.mp4', '.webm', '.mov', '.avi'],
+            'all': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
+        }
         self.uploader = CatboxUploader()
 
     async def check_vote(self, user_id: int) -> bool:
@@ -94,155 +100,104 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="Last 1000", value=1000),
         app_commands.Choice(name="All messages", value=0)
     ])
-    async def download_media(
-        self, 
-        interaction: discord.Interaction, 
-        type: str,
-        messages: int = 100
-    ):
+    async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 100):
         try:
-            print(f"[DEBUG] Starting download - Type: {type}, Messages: {messages}")
             await interaction.response.defer()
             
-            status_message = await interaction.followup.send("🔍 Analyzing messages...", wait=True)
-            
-            # Convertir messages en limite
-            limit = None if messages == 0 else messages  # Si 0, pas de limite (all messages)
-
-            # Première passe : compter les fichiers et la taille totale
-            total_files = 0
-            total_size = 0
+            # Récupérer les messages
+            limit = None if messages == 0 else messages
+            attachments = []
             
             async for message in interaction.channel.history(limit=limit):
-                for attachment in message.attachments:
+                attachments.extend(message.attachments)
+
+            if not attachments:
+                await interaction.followup.send("❌ No attachments found!")
+                return
+
+            await self.process_attachments(interaction, attachments, type)
+
+        except Exception as e:
+            print(f"Error in download_media: {e}")
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+
+    async def process_attachments(self, interaction, attachments, type):
+        """Traite les attachments avec streaming sur SSD"""
+        try:
+            total_files = len(attachments)
+            processed = 0
+            
+            # Utiliser un dossier temporaire sur le SSD
+            temp_dir = '/home/botuser/discord-bot/temp'
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # Créer un sous-dossier unique pour cette opération
+            session_dir = os.path.join(temp_dir, f'download_{int(time.time())}')
+            os.makedirs(os.path.join(session_dir, "Images"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "Videos"), exist_ok=True)
+
+            try:
+                status_message = await interaction.followup.send(
+                    f"⏳ Processing 0/{total_files} files...",
+                    wait=True
+                )
+
+                # Traiter chaque fichier
+                for attachment in attachments:
                     ext = os.path.splitext(attachment.filename.lower())[1]
                     if ((type == "images" and ext in self.bot.media_types['images']) or
                         (type == "videos" and ext in self.bot.media_types['videos']) or
                         (type == "all" and ext in self.bot.media_types['all'])):
-                        total_files += 1
-                        total_size += attachment.size
-
-            if total_files == 0:
-                await status_message.edit(content="❌ No media files found!")
-                return
-
-            print(f"[DEBUG] Found {total_files} files, total size: {total_size}")
-            await status_message.edit(content=f"📥 Found {total_files} files ({format_size(total_size)})")
-
-            # Vérifier si on doit utiliser Catbox
-            if total_size >= MAX_DIRECT_DOWNLOAD_SIZE:
-                has_voted = await self.check_vote(interaction.user.id)
-                if not has_voted:
-                    vote_embed = discord.Embed(
-                        title="⚠️ Vote Required",
-                        description=(
-                            "You need to vote for the bot to download large files!\n\n"
-                            "📝 **Why vote?**\n"
-                            "• Support the bot\n"
-                            "• Get access to all features\n"
-                            "• Help us grow\n\n"
-                            "🔗 **Vote Link**\n"
-                            "[Click here to vote](https://top.gg/bot/1332684877551763529/vote)\n\n"
-                            "✨ **Free Features**\n"
-                            "• Download files up to 25MB\n"
-                            "• Direct ZIP downloads\n\n"
-                            "🎁 **Premium Features** (after voting)\n"
-                            "• Download files of any size\n"
-                            "• Organize files by category\n"
-                            "• Permanent download links"
-                        ),
-                        color=0xFF0000
-                    )
-                    vote_embed.set_footer(text="Your vote lasts 12 hours!")
-                    await status_message.edit(content=None, embed=vote_embed)
-                    return
-
-            # Créer et envoyer les fichiers par lots
-            BATCH_SIZE = 50 * 1024 * 1024  # 50MB par lot
-            current_batch_size = 0
-            current_batch_files = 0
-            batch_number = 1
-            
-            temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-            zip_file = zipfile.ZipFile(temp_zip.name, 'w')
-
-            try:
-                async for message in interaction.channel.history(limit=limit):
-                    for attachment in message.attachments:
-                        ext = os.path.splitext(attachment.filename.lower())[1]
                         
-                        if ((type == "images" and ext in self.bot.media_types['images']) or
-                            (type == "videos" and ext in self.bot.media_types['videos']) or
-                            (type == "all" and ext in self.bot.media_types['all'])):
-                            
-                            # Télécharger et ajouter au ZIP
-                            file_data = await attachment.read()
-                            folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
-                            zip_path = f"{folder}/{attachment.filename}"
-                            
-                            zip_file.writestr(zip_path, file_data)
-                            current_batch_size += len(file_data)
-                            current_batch_files += 1
-
-                            # Si le lot atteint la limite, l'envoyer
-                            if current_batch_size >= BATCH_SIZE or current_batch_files >= 50:
-                                zip_file.close()
-                                
-                                # Envoyer le lot actuel
-                                if total_size >= MAX_DIRECT_DOWNLOAD_SIZE:
-                                    with open(temp_zip.name, 'rb') as f:
-                                        file_content = f.read()
-                                        zip_name = f"media_files_part{batch_number}.zip"
-                                        stats, download_link = await self.uploader.upload_file(zip_name, file_content)
-                                    await interaction.followup.send(f"📦 Part {batch_number}: {download_link}")
-                                else:
-                                    await interaction.followup.send(
-                                        f"📦 Part {batch_number}:",
-                                        file=discord.File(temp_zip.name, f"media_files_part{batch_number}.zip")
-                                    )
-
-                                # Préparer le prochain lot
-                                os.unlink(temp_zip.name)
-                                temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-                                zip_file = zipfile.ZipFile(temp_zip.name, 'w')
-                                current_batch_size = 0
-                                current_batch_files = 0
-                                batch_number += 1
-
+                        # Déterminer le dossier de destination
+                        folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
+                        file_path = os.path.join(session_dir, folder, attachment.filename)
+                        
+                        # Stream le fichier sur le SSD
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(attachment.url) as response:
+                                if response.status == 200:
+                                    async with aiofiles.open(file_path, 'wb') as f:
+                                        async for data in response.content.iter_chunked(8192):
+                                            await f.write(data)
+                        
+                        processed += 1
+                        if processed % 5 == 0:  # Update tous les 5 fichiers
                             await status_message.edit(
-                                content=f"📥 Processing... {current_batch_files}/{total_files} files"
+                                content=f"⏳ Processing {processed}/{total_files} files..."
                             )
 
-                # Envoyer le dernier lot s'il reste des fichiers
-                if current_batch_files > 0:
-                    zip_file.close()
-                    if total_size >= MAX_DIRECT_DOWNLOAD_SIZE:
-                        with open(temp_zip.name, 'rb') as f:
-                            file_content = f.read()
-                            zip_name = f"media_files_part{batch_number}.zip"
-                            stats, download_link = await self.uploader.upload_file(zip_name, file_content)
-                        await interaction.followup.send(f"📦 Part {batch_number} (final): {download_link}")
-                    else:
-                        await interaction.followup.send(
-                            f"📦 Part {batch_number} (final):",
-                            file=discord.File(temp_zip.name, f"media_files_part{batch_number}.zip")
-                        )
+                # Créer le ZIP en streaming
+                zip_path = os.path.join(temp_dir, f'media_files_{int(time.time())}.zip')
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for folder in ["Images", "Videos"]:
+                        folder_path = os.path.join(session_dir, folder)
+                        if os.path.exists(folder_path):
+                            for root, _, files in os.walk(folder_path):
+                                for file in files:
+                                    file_path = os.path.join(root, file)
+                                    arc_name = os.path.relpath(file_path, session_dir)
+                                    zipf.write(file_path, arc_name)
 
-                await status_message.edit(content=f"✅ Download complete! {total_files} files processed")
+                # Upload le ZIP
+                await status_message.edit(content="⏳ Uploading to file host...")
+                async with aiofiles.open(zip_path, 'rb') as f:
+                    file_data = await f.read()
+                    await interaction.followup.send(file=discord.File(
+                        fp=zip_path,
+                        filename="media_files.zip"
+                    ))
 
             finally:
-                zip_file.close()
-                os.unlink(temp_zip.name)
+                # Nettoyer les fichiers temporaires
+                if os.path.exists(session_dir):
+                    shutil.rmtree(session_dir)
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
 
         except Exception as e:
-            # Vérifiez si le message existe avant de tenter de le modifier
-            if status_message:
-                try:
-                    await status_message.edit(content=f"❌ An error occurred: {str(e)}")
-                except Exception as edit_error:
-                    print(f"Failed to edit status message: {str(edit_error)}")
-            else:
-                print("Status message does not exist.")
+            print(f"Error in process_attachments: {e}")
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}")
 
     @app_commands.command(name="checkvote", description="Check your vote status")
     async def check_vote_status(self, interaction: discord.Interaction):
@@ -299,26 +254,52 @@ class DownloadCog(commands.Cog):
         return "\n".join(response)
 
     @commands.command(name='dl')
-    async def download(self, ctx):
-        """Télécharge et organise les médias du message"""
+    async def download(self, ctx, channel: typing.Optional[discord.TextChannel] = None, limit: typing.Optional[int] = None):
+        """Télécharge et organise les médias du message ou du channel
+        
+        Usage:
+        !dl - Télécharge les médias du message actuel ou référencé
+        !dl #channel - Télécharge tous les médias du channel spécifié
+        !dl #channel 10 - Télécharge les médias des 10 derniers messages du channel
+        """
         try:
-            # Vérifier s'il y a des pièces jointes
-            if not ctx.message.attachments:
-                if ctx.message.reference:  # Vérifier s'il y a un message référencé
-                    referenced_msg = await ctx.fetch_message(ctx.message.reference.message_id)
-                    attachments = referenced_msg.attachments
+            attachments = []
+
+            # Si un channel est spécifié
+            if channel:
+                loading_msg = await ctx.send(f"⏳ Recherche des médias dans {channel.mention}...")
+                
+                # Récupérer les messages
+                if limit:
+                    messages = [msg async for msg in channel.history(limit=limit)]
                 else:
-                    await ctx.send("❌ Aucun média trouvé")
-                    return
+                    messages = [msg async for msg in channel.history(limit=None)]  # Pas de limite
+                
+                # Collecter tous les attachments
+                for msg in messages:
+                    attachments.extend(msg.attachments)
+                
+                await loading_msg.edit(content=f"📂 Trouvé {len(attachments)} fichiers...")
+
+            # Sinon, vérifier le message actuel ou référencé
             else:
-                attachments = ctx.message.attachments
+                if not ctx.message.attachments:
+                    if ctx.message.reference:  # Message référencé
+                        referenced_msg = await ctx.fetch_message(ctx.message.reference.message_id)
+                        attachments = referenced_msg.attachments
+                    else:
+                        await ctx.send("❌ Aucun média trouvé. Utilisez `!dl #channel` pour télécharger depuis un channel.")
+                        return
+                else:
+                    attachments = ctx.message.attachments
 
             if not attachments:
-                await ctx.send("❌ Aucun média trouvé")
+                await ctx.send("❌ Aucun média trouvé dans les messages.")
                 return
 
             # Message de chargement avec progression
-            loading_msg = await ctx.send("⏳ Analyse des fichiers en cours...")
+            if not channel:  # Si on n'a pas déjà créé le message de chargement
+                loading_msg = await ctx.send("⏳ Analyse des fichiers en cours...")
 
             # Organiser les fichiers par type
             media_files: Dict[str, List[discord.Attachment]] = {}
@@ -329,7 +310,7 @@ class DownloadCog(commands.Cog):
                 media_files[file_type].append(attachment)
 
             # Mettre à jour le message de chargement
-            await loading_msg.edit(content="⏳ Classification et organisation des fichiers...")
+            await loading_msg.edit(content=f"⚙️ Traitement de {len(attachments)} fichiers...")
 
             # Upload les fichiers
             stats, url = await self.uploader.organize_and_upload(media_files)
@@ -422,86 +403,6 @@ class DownloadCog(commands.Cog):
                 temp_path = f"{file_path}.part{i}"
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
-
-    async def process_attachments(self, interaction, attachments, type):
-        """Traite les attachments avec streaming sur SSD"""
-        try:
-            total_files = len(attachments)
-            processed = 0
-            
-            # Utiliser un dossier temporaire sur le SSD
-            temp_dir = '/home/botuser/discord-bot/temp'
-            os.makedirs(temp_dir, exist_ok=True)
-            
-            # Créer un sous-dossier unique pour cette opération
-            session_dir = os.path.join(temp_dir, f'download_{int(time.time())}')
-            os.makedirs(os.path.join(session_dir, "Images"), exist_ok=True)
-            os.makedirs(os.path.join(session_dir, "Videos"), exist_ok=True)
-
-            try:
-                status_message = await interaction.followup.send(
-                    f"⏳ Processing 0/{total_files} files...",
-                    wait=True
-                )
-
-                # Traiter chaque fichier
-                for attachment in attachments:
-                    ext = os.path.splitext(attachment.filename.lower())[1]
-                    if ((type == "images" and ext in self.bot.media_types['images']) or
-                        (type == "videos" and ext in self.bot.media_types['videos']) or
-                        (type == "all" and ext in self.bot.media_types['all'])):
-                        
-                        # Déterminer le dossier de destination
-                        folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
-                        file_path = os.path.join(session_dir, folder, attachment.filename)
-                        
-                        # Stream le fichier sur le SSD
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get(attachment.url) as response:
-                                if response.status == 200:
-                                    async with aiofiles.open(file_path, 'wb') as f:
-                                        async for data in response.content.iter_chunked(8192):
-                                            await f.write(data)
-                        
-                        processed += 1
-                        if processed % 5 == 0:  # Update tous les 5 fichiers
-                            await status_message.edit(
-                                content=f"⏳ Processing {processed}/{total_files} files..."
-                            )
-
-                # Créer le ZIP en streaming
-                zip_path = os.path.join(temp_dir, f'media_files_{int(time.time())}.zip')
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for folder in ["Images", "Videos"]:
-                        folder_path = os.path.join(session_dir, folder)
-                        if os.path.exists(folder_path):
-                            for root, _, files in os.walk(folder_path):
-                                for file in files:
-                                    file_path = os.path.join(root, file)
-                                    arc_name = os.path.relpath(file_path, session_dir)
-                                    zipf.write(file_path, arc_name)
-
-                # Upload le ZIP vers Catbox
-                await status_message.edit(content="⏳ Uploading to file host...")
-                async with aiofiles.open(zip_path, 'rb') as f:
-                    file_data = await f.read()
-                    stats, url = await self.uploader.upload_file("media_files.zip", file_data)
-
-                # Message final
-                response = self.format_stats(stats)
-                response += f"\n\n🔗 Download Link:\n{url}"
-                await status_message.edit(content=response)
-
-            finally:
-                # Nettoyer les fichiers temporaires
-                if os.path.exists(session_dir):
-                    shutil.rmtree(session_dir)
-                if os.path.exists(zip_path):
-                    os.remove(zip_path)
-
-        except Exception as e:
-            print(f"Error in process_attachments: {e}")
-            await interaction.followup.send(f"❌ An error occurred: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
