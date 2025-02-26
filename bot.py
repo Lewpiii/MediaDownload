@@ -44,6 +44,14 @@ try:
 except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
 
+# Définir l'intents
+intents = discord.Intents.default()
+intents.message_content = True
+intents.guilds = True
+
+# Créer le bot avec un préfixe
+bot = commands.Bot(command_prefix="!", intents=intents)
+
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
