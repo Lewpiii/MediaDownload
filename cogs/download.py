@@ -16,7 +16,12 @@ import shutil
 import typing
 from utils.logging import Logger
 
-logger = Logger()
+logger = None  # Sera initialisé dans le setup
+
+async def setup(bot):
+    global logger
+    logger = Logger(bot)
+    await bot.add_cog(DownloadCog(bot))
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
