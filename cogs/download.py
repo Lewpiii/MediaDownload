@@ -14,6 +14,9 @@ import asyncio
 import aiofiles
 import shutil
 import typing
+from utils.logging import setup_logging
+
+logger = setup_logging()
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
@@ -26,12 +29,19 @@ def format_size(size_bytes: int) -> str:
 class DownloadCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot.media_types = {
-            'images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-            'videos': ['.mp4', '.webm', '.mov', '.avi'],
-            'all': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
-        }
-        self.uploader = CatboxUploader()
+        logger.info("Initializing DownloadCog...")
+        try:
+            self.uploader = CatboxUploader()
+            logger.info("✓ CatboxUploader initialized")
+            self.bot.media_types = {
+                'images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+                'videos': ['.mp4', '.webm', '.mov', '.avi'],
+                'all': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
+            }
+            logger.info("✓ Media types configured")
+        except Exception as e:
+            logger.error(f"✗ Failed to initialize DownloadCog: {e}")
+            raise e
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté via l'API Top.gg"""
@@ -95,12 +105,13 @@ class DownloadCog(commands.Cog):
         app_commands.Choice(name="🎥 Videos", value="videos"),
         app_commands.Choice(name="📁 All", value="all")
     ])
-    @app_commands.choices(messages=[  # 0 signifiera "all"
+    @app_commands.choices(messages=[
         app_commands.Choice(name="Last 100", value=100),
         app_commands.Choice(name="Last 1000", value=1000),
-        app_commands.Choice(name="All messages", value=0)
+        app_commands.Choice(name="All messages", value=0),
     ])
     async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 100):
+        logger.info(f"Download command called with type={type}, messages={messages}")
         try:
             await interaction.response.defer()
             
@@ -405,4 +416,10 @@ class DownloadCog(commands.Cog):
                     os.remove(temp_path)
 
 async def setup(bot):
-    await bot.add_cog(DownloadCog(bot)) 
+    logger.info("Setting up DownloadCog...")
+    try:
+        await bot.add_cog(DownloadCog(bot))
+        logger.info("✓ DownloadCog loaded successfully")
+    except Exception as e:
+        logger.error(f"✗ Failed to load DownloadCog: {e}")
+        raise e 
