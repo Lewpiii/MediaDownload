@@ -12,6 +12,7 @@ from utils.catbox import CatboxUploader
 from typing import Dict, List
 import asyncio
 import aiofiles
+import shutil
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
@@ -421,6 +422,86 @@ class DownloadCog(commands.Cog):
                 temp_path = f"{file_path}.part{i}"
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
+
+    async def process_attachments(self, interaction, attachments, type):
+        """Traite les attachments avec streaming sur SSD"""
+        try:
+            total_files = len(attachments)
+            processed = 0
+            
+            # Utiliser un dossier temporaire sur le SSD
+            temp_dir = '/home/botuser/discord-bot/temp'
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # Créer un sous-dossier unique pour cette opération
+            session_dir = os.path.join(temp_dir, f'download_{int(time.time())}')
+            os.makedirs(os.path.join(session_dir, "Images"), exist_ok=True)
+            os.makedirs(os.path.join(session_dir, "Videos"), exist_ok=True)
+
+            try:
+                status_message = await interaction.followup.send(
+                    f"⏳ Processing 0/{total_files} files...",
+                    wait=True
+                )
+
+                # Traiter chaque fichier
+                for attachment in attachments:
+                    ext = os.path.splitext(attachment.filename.lower())[1]
+                    if ((type == "images" and ext in self.bot.media_types['images']) or
+                        (type == "videos" and ext in self.bot.media_types['videos']) or
+                        (type == "all" and ext in self.bot.media_types['all'])):
+                        
+                        # Déterminer le dossier de destination
+                        folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
+                        file_path = os.path.join(session_dir, folder, attachment.filename)
+                        
+                        # Stream le fichier sur le SSD
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(attachment.url) as response:
+                                if response.status == 200:
+                                    async with aiofiles.open(file_path, 'wb') as f:
+                                        async for data in response.content.iter_chunked(8192):
+                                            await f.write(data)
+                        
+                        processed += 1
+                        if processed % 5 == 0:  # Update tous les 5 fichiers
+                            await status_message.edit(
+                                content=f"⏳ Processing {processed}/{total_files} files..."
+                            )
+
+                # Créer le ZIP en streaming
+                zip_path = os.path.join(temp_dir, f'media_files_{int(time.time())}.zip')
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for folder in ["Images", "Videos"]:
+                        folder_path = os.path.join(session_dir, folder)
+                        if os.path.exists(folder_path):
+                            for root, _, files in os.walk(folder_path):
+                                for file in files:
+                                    file_path = os.path.join(root, file)
+                                    arc_name = os.path.relpath(file_path, session_dir)
+                                    zipf.write(file_path, arc_name)
+
+                # Upload le ZIP vers Catbox
+                await status_message.edit(content="⏳ Uploading to file host...")
+                async with aiofiles.open(zip_path, 'rb') as f:
+                    file_data = await f.read()
+                    stats, url = await self.uploader.upload_file("media_files.zip", file_data)
+
+                # Message final
+                response = self.format_stats(stats)
+                response += f"\n\n🔗 Download Link:\n{url}"
+                await status_message.edit(content=response)
+
+            finally:
+                # Nettoyer les fichiers temporaires
+                if os.path.exists(session_dir):
+                    shutil.rmtree(session_dir)
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+
+        except Exception as e:
+            print(f"Error in process_attachments: {e}")
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(DownloadCog(bot)) 
