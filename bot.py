@@ -172,8 +172,17 @@ class MediaDownloadBot(commands.Bot):
             print("✗ Log channel not found!")
 
         try:
+            # Force sync all commands
+            print("Clearing commands...")
+            self.tree.clear_commands(guild=None)
+            print("Syncing commands...")
             synced = await self.tree.sync()
-            print(f"Synced {len(synced)} command(s)")
+            print(f"Successfully synced {len(synced)} commands!")
+            
+            # List all commands
+            print("\nAvailable commands:")
+            for cmd in self.tree.get_commands():
+                print(f"- /{cmd.name}")
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
