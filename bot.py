@@ -319,6 +319,31 @@ class MediaDownloadBot(commands.Bot):
         except Exception as e:
             await ctx.send(f"Failed to sync commands: {e}")
 
+    @tasks.loop(count=1)
+    async def sync_commands_once(self):
+        """Synchronize commands with Discord once at startup"""
+        try:
+            print("Syncing commands...")
+            # Clear any existing commands
+            self.tree.clear_commands(guild=None)
+            # Sync commands
+            synced = await self.tree.sync()
+            print(f"Successfully synced {len(synced)} commands!")
+            
+            # List all commands
+            print("\nAvailable commands:")
+            for cmd in self.tree.get_commands():
+                print(f"- /{cmd.name}")
+        except Exception as e:
+            print(f"Failed to sync commands: {e}")
+            import traceback
+            traceback.print_exc()
+
+    @sync_commands_once.before_loop
+    async def before_sync(self):
+        """Wait until the bot is ready before syncing commands"""
+        await self.wait_until_ready()
+
 def run_bot():
     """Démarrer le bot"""
     bot = MediaDownloadBot()

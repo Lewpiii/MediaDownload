@@ -27,7 +27,7 @@ class MediaDetector:
             print("Loading AI models...")
             
             # Définir un dossier de cache permanent
-            self.cache_dir = Path("/opt/render/project/src/model_cache")
+            self.cache_dir = Path("./model_cache")
             self.cache_dir.mkdir(exist_ok=True)
             
             # Charger depuis le cache si possible

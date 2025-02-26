@@ -14,9 +14,9 @@ import asyncio
 import aiofiles
 import shutil
 import typing
-from utils.logging import setup_logging
+from utils.logging import Logger
 
-logger = setup_logging()
+logger = Logger()
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
