@@ -2,26 +2,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 import os
-import io
 from datetime import datetime
 import asyncio
-import sys
-import traceback
 import aiohttp
-import time
-import tempfile
-import subprocess
-import topgg
 from counters import download_count, successful_downloads, failed_downloads
-import requests
 from dotenv import load_dotenv
-import json
 from pathlib import Path
-import zipfile
-from utils.logging import Logger, setup_logging
+from utils.logging import Logger
 from utils.catbox import CatboxUploader
-from utils.ai_detector import AIDetector
-from utils.model_loader import ModelLoader
 
 # Configuration
 load_dotenv()
@@ -46,8 +34,8 @@ try:
 except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
 
-# Configurer le logging
-logger = setup_logging()
+# Configurer le logger
+logger = Logger()
 
 # Définir l'intents
 intents = discord.Intents.default()
