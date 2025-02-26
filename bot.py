@@ -18,8 +18,10 @@ from dotenv import load_dotenv
 import json
 from pathlib import Path
 import zipfile
-from utils.logging import Logger
+from utils.logging import Logger, setup_logging
 from utils.catbox import CatboxUploader
+from utils.ai_detector import AIDetector
+from utils.model_loader import ModelLoader
 
 # Configuration
 load_dotenv()
@@ -43,6 +45,9 @@ try:
     LOGS_CHANNEL_ID = int(LOGS_CHANNEL_ID) if LOGS_CHANNEL_ID else None
 except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
+
+# Configurer le logging
+logger = setup_logging()
 
 # Définir l'intents
 intents = discord.Intents.default()
@@ -183,6 +188,15 @@ class MediaDownloadBot(commands.Bot):
             print("\nAvailable commands:")
             for cmd in self.tree.get_commands():
                 print(f"- /{cmd.name}")
+            
+            # Vérifier les modules utils
+            print("\nChecking utils modules:")
+            try:
+                uploader = CatboxUploader()
+                print("✓ CatboxUploader loaded")
+            except Exception as e:
+                print(f"✗ CatboxUploader failed: {e}")
+            
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
