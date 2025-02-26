@@ -53,7 +53,7 @@ class MediaDownloadBot(commands.Bot):
         intents.guilds = True
         
         super().__init__(
-            command_prefix='!',
+            command_prefix=commands.when_mentioned,  # Utilise uniquement la mention du bot comme préfixe
             intents=intents,
             help_command=None
         )
@@ -92,6 +92,9 @@ class MediaDownloadBot(commands.Bot):
         
         # Démarrer la rotation du statut
         self.rotate_status.start()
+
+        # Démarrer la synchronisation des commandes
+        self.sync_commands_once.start()
 
     @tasks.loop(minutes=5)
     async def rotate_status(self):
