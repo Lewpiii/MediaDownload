@@ -33,15 +33,17 @@ class DownloadCog(commands.Cog):
         try:
             self.uploader = CatboxUploader()
             logger.info("✓ CatboxUploader initialized")
-            self.bot.media_types = {
-                'images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-                'videos': ['.mp4', '.webm', '.mov', '.avi'],
-                'all': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
-            }
-            logger.info("✓ Media types configured")
         except Exception as e:
-            logger.error(f"✗ Failed to initialize DownloadCog: {e}")
-            raise e
+            logger.error(f"✗ Failed to initialize CatboxUploader: {e}")
+            # Au lieu de raise, on continue avec une version simplifiée
+            self.uploader = None
+            
+        self.bot.media_types = {
+            'images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+            'videos': ['.mp4', '.webm', '.mov', '.avi'],
+            'all': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
+        }
+        logger.info("✓ Media types configured")
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté via l'API Top.gg"""
