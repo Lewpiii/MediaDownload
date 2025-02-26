@@ -286,6 +286,16 @@ class MediaDownloadBot(commands.Bot):
                 embed.set_thumbnail(url=guild.icon.url)
             await self.log_channel.send(embed=embed)
 
+    @commands.command()
+    @commands.is_owner()
+    async def sync(self, ctx):
+        """Sync the application commands"""
+        try:
+            synced = await self.tree.sync()
+            await ctx.send(f"Synced {len(synced)} commands!")
+        except Exception as e:
+            await ctx.send(f"Failed to sync commands: {e}")
+
 def run_bot():
     """Démarrer le bot"""
     bot = MediaDownloadBot()
