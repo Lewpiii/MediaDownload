@@ -35,7 +35,7 @@ except ValueError as e:
     print(f"❌ Error converting channel IDs: {e}")
 
 # Configurer le logger
-logger = Logger()
+logger = None
 
 # Définir l'intents
 intents = discord.Intents.default()
@@ -44,6 +44,7 @@ intents.guilds = True
 
 # Créer le bot avec un préfixe
 bot = commands.Bot(command_prefix="!", intents=intents)
+logger = Logger(bot)
 
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
