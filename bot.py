@@ -42,10 +42,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 
-# Créer le bot avec un préfixe
-bot = commands.Bot(command_prefix="!", intents=intents)
-logger = Logger(bot)
-
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
