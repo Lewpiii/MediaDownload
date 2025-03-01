@@ -49,7 +49,7 @@ class MediaDownloadBot(commands.Bot):
         intents.guilds = True
         
         super().__init__(
-            command_prefix=commands.when_mentioned,  # Utilise uniquement la mention du bot comme préfixe
+            command_prefix=commands.when_mentioned,
             intents=intents,
             help_command=None
         )
@@ -76,21 +76,16 @@ class MediaDownloadBot(commands.Bot):
         print("=======================")
 
         # Charger les cogs
-        for filename in os.listdir('./cogs'):
-            if filename.endswith('.py'):
-                try:
-                    await self.load_extension(f'cogs.{filename[:-3]}')
-                    print(f"Loaded {filename}")
-                except Exception as e:
-                    print(f"Failed to load {filename}: {e}")
-
-        print("✓ All cogs loaded")
+        await self.load_cogs()
+        
+        # Attendre que le bot soit prêt
+        await self.wait_until_ready()
+        
+        # Démarrer la synchronisation des commandes
+        await self.sync_commands()
         
         # Démarrer la rotation du statut
         self.rotate_status.start()
-
-        # Démarrer la synchronisation des commandes
-        self.sync_commands_once.start()
 
     @tasks.loop(minutes=5)
     async def rotate_status(self):
@@ -315,14 +310,36 @@ class MediaDownloadBot(commands.Bot):
         except Exception as e:
             await ctx.send(f"Failed to sync commands: {e}")
 
-    @tasks.loop(count=1)
-    async def sync_commands_once(self):
-        """Synchronize commands with Discord once at startup"""
+    async def load_cogs(self):
+        """Load all cogs from the cogs directory"""
+        try:
+            print("Loading cogs...")
+            # Charger tous les cogs du dossier cogs
+            for filename in os.listdir('./cogs'):
+                if filename.endswith('.py') and not filename.startswith('__'):
+                    try:
+                        await self.load_extension(f'cogs.{filename[:-3]}')
+                        print(f"Loaded cog: {filename}")
+                    except Exception as e:
+                        print(f"Failed to load {filename}: {e}")
+            print("Cogs loaded successfully!")
+        except Exception as e:
+            print(f"Error loading cogs: {e}")
+            
+    async def sync_commands(self):
+        """Synchronize commands with Discord"""
         try:
             print("Syncing commands...")
             
-            # Sync commands to your specific guild
+            # Sync commands to a specific guild
             guild = discord.Object(id=1333107536899084372)  # Ton ID de serveur
+            
+            # Ajouter une commande de test directement
+            @self.tree.command(name="testping", description="Test if commands are working")
+            async def testping(interaction: discord.Interaction):
+                await interaction.response.send_message("Test command works!")
+            
+            # Sync commands
             guild_synced = await self.tree.sync(guild=guild)
             print(f"Successfully synced {len(guild_synced)} guild commands!")
             
@@ -335,19 +352,9 @@ class MediaDownloadBot(commands.Bot):
             import traceback
             traceback.print_exc()
 
-    @sync_commands_once.before_loop
-    async def before_sync(self):
-        """Wait until the bot is ready before syncing commands"""
-        await self.wait_until_ready()
-
 def run_bot():
     """Démarrer le bot"""
     bot = MediaDownloadBot()
-    
-    # Ajouter une commande de test directement
-    @bot.tree.command(name="testping", description="Test if commands are working")
-    async def testping(interaction: discord.Interaction):
-        await interaction.response.send_message("Test command works!")
     
     try:
         bot.run(os.getenv('DISCORD_TOKEN'))

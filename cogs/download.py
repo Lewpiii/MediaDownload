@@ -15,13 +15,25 @@ import aiofiles
 import shutil
 import typing
 from utils.logging import Logger
+import logging
 
-logger = None  # Sera initialisé dans le setup
+# Configurer un logger basique
+logger = logging.getLogger('download')
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 async def setup(bot):
-    global logger
-    logger = Logger(bot)
+    # Ne pas essayer d'initialiser logger ici
     await bot.add_cog(DownloadCog(bot))
+
+try:
+    LOGS_CHANNEL_ID = int(os.getenv('LOGS_CHANNEL_ID', '0'))
+except (ValueError, TypeError):
+    print("Warning: LOGS_CHANNEL_ID is not a valid integer. Using default value 0.")
+    LOGS_CHANNEL_ID = 0 
 
 def format_size(size_bytes: int) -> str:
     """Convertit les bytes en format lisible"""
@@ -348,13 +360,4 @@ class DownloadCog(commands.Cog):
             for i in range(1, chunk_number):
                 temp_path = f"{file_path}.part{i}"
                 if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-async def setup(bot):
-    logger.info("Setting up DownloadCog...")
-    try:
-        await bot.add_cog(DownloadCog(bot))
-        logger.info("✓ DownloadCog loaded successfully")
-    except Exception as e:
-        logger.error(f"✗ Failed to load DownloadCog: {e}")
-        raise e 
+                    os.remove(temp_path) 
