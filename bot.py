@@ -320,15 +320,15 @@ class MediaDownloadBot(commands.Bot):
         """Synchronize commands with Discord once at startup"""
         try:
             print("Syncing commands...")
-            # Clear any existing commands
-            self.tree.clear_commands(guild=None)
-            # Sync commands
-            synced = await self.tree.sync()
-            print(f"Successfully synced {len(synced)} commands!")
+            
+            # Sync commands to your specific guild
+            guild = discord.Object(id=1333107536899084372)  # Ton ID de serveur
+            guild_synced = await self.tree.sync(guild=guild)
+            print(f"Successfully synced {len(guild_synced)} guild commands!")
             
             # List all commands
             print("\nAvailable commands:")
-            for cmd in self.tree.get_commands():
+            for cmd in self.tree.get_commands(guild=guild):
                 print(f"- /{cmd.name}")
         except Exception as e:
             print(f"Failed to sync commands: {e}")
@@ -343,6 +343,12 @@ class MediaDownloadBot(commands.Bot):
 def run_bot():
     """Démarrer le bot"""
     bot = MediaDownloadBot()
+    
+    # Ajouter une commande de test directement
+    @bot.tree.command(name="testping", description="Test if commands are working")
+    async def testping(interaction: discord.Interaction):
+        await interaction.response.send_message("Test command works!")
+    
     try:
         bot.run(os.getenv('DISCORD_TOKEN'))
     except Exception as e:
