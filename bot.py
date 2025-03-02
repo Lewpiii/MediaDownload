@@ -49,8 +49,16 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 
+logging.info(f"Token trouvé : {'✓' if os.getenv('DISCORD_TOKEN') else '✗'}")
+
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
+        print("\n=== Debug Discord Bot ===")
+        print(f"Token exists: {'Yes' if os.getenv('DISCORD_TOKEN') else 'No'}")
+        print(f"Logs Channel ID: {os.getenv('LOGS_CHANNEL_ID')}")
+        print(f"Webhook URL exists: {'Yes' if os.getenv('WEBHOOK_URL') else 'No'}")
+        print("=======================\n")
+        
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
@@ -371,9 +379,12 @@ def run_bot():
     bot = MediaDownloadBot()
     
     try:
+        print("Starting bot...")
         bot.run(os.getenv('DISCORD_TOKEN'))
     except Exception as e:
         print(f"Failed to start bot: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     run_bot()
