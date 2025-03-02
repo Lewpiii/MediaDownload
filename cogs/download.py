@@ -28,40 +28,75 @@ logger.setLevel(logging.INFO)
 
 async def setup(bot):
     # Ne pas essayer d'initialiser logger ici
-    await bot.add_cog(DownloadCog(bot))
+    await bot.add_cog(Download(bot))
 
-try:
-    LOGS_CHANNEL_ID = int(os.getenv('LOGS_CHANNEL_ID', '0'))
-except (ValueError, TypeError):
-    print("Warning: LOGS_CHANNEL_ID is not a valid integer. Using default value 0.")
-    LOGS_CHANNEL_ID = 0 
-
-def format_size(size_bytes: int) -> str:
-    """Convertit les bytes en format lisible"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
-
-class DownloadCog(commands.Cog):
+class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        logger.info("Initializing DownloadCog...")
+        self.logger = logging.getLogger('bot.download')
+        # Ne pas essayer d'initialiser logger ici
+        self.logs_channel_id = None
+
+    async def cog_load(self):
+        """Appelé quand le cog est chargé"""
         try:
-            self.uploader = CatboxUploader()
-            logger.info("✓ CatboxUploader initialized")
-        except Exception as e:
-            logger.error(f"✗ Failed to initialize CatboxUploader: {e}")
-            # Au lieu de raise, on continue avec une version simplifiée
-            self.uploader = None
+            if channel_id := os.getenv('LOGS_CHANNEL_ID'):
+                self.logs_channel_id = int(channel_id)
+                self.logger.info(f"Log channel ID set to: {self.logs_channel_id}")
+            else:
+                self.logger.warning("LOGS_CHANNEL_ID not set")
+        except ValueError:
+            self.logger.warning("Invalid LOGS_CHANNEL_ID, logging disabled")
+            self.logs_channel_id = None
+
+    @app_commands.command(
+        name="download",
+        description="Télécharge une vidéo ou une image depuis un lien"
+    )
+    async def download(self, interaction: discord.Interaction, url: str):
+        try:
+            # Incrémenter le compteur de téléchargements
+            download_count.inc()
             
-        self.bot.media_types = {
-            'images': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-            'videos': ['.mp4', '.webm', '.mov', '.avi'],
-            'all': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
-        }
-        logger.info("✓ Media types configured")
+            # Message initial
+            await interaction.response.send_message("🔄 Traitement de votre demande...")
+            
+            # Vérification de l'URL
+            if not url.startswith(('http://', 'https://')):
+                failed_downloads.inc()
+                return await interaction.edit_original_response(
+                    content="❌ URL invalide. Veuillez fournir une URL valide."
+                )
+            
+            # Log dans le canal de logs si configuré
+            if self.logs_channel_id:
+                try:
+                    log_channel = self.bot.get_channel(self.logs_channel_id)
+                    if log_channel:
+                        embed = discord.Embed(
+                            title="📥 Nouvelle demande de téléchargement",
+                            description=f"URL: {url}",
+                            color=0x3498db,
+                            timestamp=datetime.utcnow()
+                        )
+                        embed.add_field(name="Utilisateur", value=f"{interaction.user.name} ({interaction.user.id})")
+                        embed.add_field(name="Serveur", value=f"{interaction.guild.name} ({interaction.guild.id})")
+                        await log_channel.send(embed=embed)
+                except Exception as e:
+                    self.logger.error(f"Error sending log message: {e}")
+            
+            # TODO: Ajouter la logique de téléchargement ici
+            successful_downloads.inc()
+            await interaction.edit_original_response(
+                content=f"✅ URL reçue : {url}\nEn cours de développement..."
+            )
+
+        except Exception as e:
+            failed_downloads.inc()
+            self.logger.error(f"Erreur lors du téléchargement: {e}")
+            await interaction.edit_original_response(
+                content="❌ Une erreur est survenue lors du téléchargement."
+            )
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté via l'API Top.gg"""
@@ -363,62 +398,10 @@ class DownloadCog(commands.Cog):
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
 
-class Download(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.logger = logging.getLogger('bot.download')
-        # Récupérer LOGS_CHANNEL_ID de manière sécurisée
-        try:
-            self.logs_channel_id = int(os.getenv('LOGS_CHANNEL_ID')) if os.getenv('LOGS_CHANNEL_ID') else None
-        except (ValueError, TypeError):
-            self.logger.warning("LOGS_CHANNEL_ID invalid or not set")
-            self.logs_channel_id = None
-
-    @app_commands.command(
-        name="download",
-        description="Télécharge une vidéo ou une image depuis un lien"
-    )
-    async def download(self, interaction: discord.Interaction, url: str):
-        try:
-            # Incrémenter le compteur de téléchargements
-            download_count.inc()
-            
-            # Message initial
-            await interaction.response.send_message("🔄 Traitement de votre demande...")
-            
-            # Vérification de l'URL
-            if not url.startswith(('http://', 'https://')):
-                failed_downloads.inc()
-                return await interaction.edit_original_response(
-                    content="❌ URL invalide. Veuillez fournir une URL valide."
-                )
-            
-            # Log dans le canal de logs si configuré
-            if self.logs_channel_id:
-                try:
-                    log_channel = self.bot.get_channel(self.logs_channel_id)
-                    if log_channel:
-                        embed = discord.Embed(
-                            title="📥 Nouvelle demande de téléchargement",
-                            description=f"URL: {url}",
-                            color=0x3498db,
-                            timestamp=datetime.utcnow()
-                        )
-                        embed.add_field(name="Utilisateur", value=f"{interaction.user.name} ({interaction.user.id})")
-                        embed.add_field(name="Serveur", value=f"{interaction.guild.name} ({interaction.guild.id})")
-                        await log_channel.send(embed=embed)
-                except Exception as e:
-                    self.logger.error(f"Error sending log message: {e}")
-            
-            # TODO: Ajouter la logique de téléchargement ici
-            successful_downloads.inc()
-            await interaction.edit_original_response(
-                content=f"✅ URL reçue : {url}\nEn cours de développement..."
-            )
-
-        except Exception as e:
-            failed_downloads.inc()
-            self.logger.error(f"Erreur lors du téléchargement: {e}")
-            await interaction.edit_original_response(
-                content="❌ Une erreur est survenue lors du téléchargement."
-            ) 
+def format_size(size_bytes: int) -> str:
+    """Convertit les bytes en format lisible"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB" 
