@@ -11,6 +11,7 @@ from pathlib import Path
 from utils.logging import Logger
 from utils.catbox import CatboxUploader
 import logging
+import sys
 
 # Configuration
 load_dotenv()
@@ -38,10 +39,10 @@ except ValueError as e:
 # Configurer le logger
 logger = None
 
-# Configuration du logging plus détaillé
+# Configuration du logging
 logging.basicConfig(
-    level=logging.DEBUG,  # Changez en DEBUG pour plus de détails
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO,  # Changé de DEBUG à INFO
+    format='%(asctime)s - %(levelname)s - %(message)s'  # Format simplifié
 )
 
 # Définir l'intents
@@ -53,11 +54,11 @@ logging.info(f"Token trouvé : {'✓' if os.getenv('DISCORD_TOKEN') else '✗'}"
 
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
-        print("\n=== Debug Discord Bot ===")
-        print(f"Token exists: {'Yes' if os.getenv('DISCORD_TOKEN') else 'No'}")
-        print(f"Logs Channel ID: {os.getenv('LOGS_CHANNEL_ID')}")
-        print(f"Webhook URL exists: {'Yes' if os.getenv('WEBHOOK_URL') else 'No'}")
-        print("=======================\n")
+        print("\n=== Media Download Bot Status ===")
+        print(f"Starting bot initialization...")
+        print(f"Discord.py version: {discord.__version__}")
+        print(f"Python version: {sys.version.split()[0]}")
+        print("===============================\n")
         
         intents = discord.Intents.default()
         intents.message_content = True
@@ -148,7 +149,11 @@ class MediaDownloadBot(commands.Bot):
     async def on_ready(self):
         """Événement appelé quand le bot est prêt"""
         try:
-            logging.info(f'Bot connecté en tant que {self.user.name}')
+            print("\n=== Bot Ready ===")
+            print(f"Logged in as: {self.user.name}")
+            print(f"Bot ID: {self.user.id}")
+            print(f"Guild count: {len(self.guilds)}")
+            print("================\n")
             
             # Définir le statut initial
             activity = discord.Activity(
