@@ -69,13 +69,12 @@ class MediaDownloadBot(commands.Bot):
             help_command=None
         )
         
+        # Initialiser les variables
         self.media_types = {
             'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
             'videos': ['.mp4', '.webm', '.mov'],
             'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
         }
-        
-        # Initialiser les variables de status
         self.last_status = True
         self.log_channel = None
         self.status_task = None
@@ -84,23 +83,33 @@ class MediaDownloadBot(commands.Bot):
 
     async def setup_hook(self):
         """Configuration initiale du bot"""
-        print("=== Debug Discord Bot ===")
-        print(f"Token exists: {'Yes' if os.getenv('TOKEN') else 'No'}")
-        print(f"Logs Channel ID: {os.getenv('LOGS_CHANNEL_ID')}")
-        print(f"Webhook URL exists: {'Yes' if self.log_webhook_url else 'No'}")
-        print("=======================")
-
-        # Charger les cogs
-        await self.load_cogs()
-        
-        # Attendre que le bot soit prêt
-        await self.wait_until_ready()
-        
-        # Démarrer la synchronisation des commandes
-        await self.sync_commands()
-        
-        # Démarrer la rotation du statut
-        self.rotate_status.start()
+        try:
+            logging.info("Starting setup hook...")
+            
+            # Charger les cogs
+            if not os.path.exists('./cogs'):
+                os.makedirs('./cogs')
+                logging.info("Created cogs directory")
+            
+            for filename in os.listdir('./cogs'):
+                if filename.endswith('.py') and not filename.startswith('__'):
+                    try:
+                        await self.load_extension(f'cogs.{filename[:-3]}')
+                        logging.info(f"✓ Loaded cog: {filename}")
+                    except Exception as e:
+                        logging.error(f"✗ Failed to load {filename}: {e}")
+            
+            # Démarrer la rotation du statut après le chargement des cogs
+            try:
+                self.rotate_status.start()
+                logging.info("✓ Started status rotation")
+            except Exception as e:
+                logging.error(f"✗ Failed to start status rotation: {e}")
+            
+            logging.info("Setup hook completed")
+        except Exception as e:
+            logging.error(f"Error in setup_hook: {e}")
+            raise  # Relève l'erreur pour voir la stack trace complète
 
     @tasks.loop(minutes=5)
     async def rotate_status(self):
@@ -136,71 +145,33 @@ class MediaDownloadBot(commands.Bot):
         """Attendre que le bot soit prêt avant de démarrer la rotation"""
         await self.wait_until_ready()
 
-    @commands.Cog.listener()
     async def on_ready(self):
         """Événement appelé quand le bot est prêt"""
-        logging.info(f'Bot connecté en tant que {self.user.name}')
         try:
-            print("\n=== Bot Ready ===")
-            print(f"Logged in as {self.user.name}")
-            print(f"Bot ID: {self.user.id}")
-            print(f"Guild count: {len(self.guilds)}")
-            print("================")
-
+            logging.info(f'Bot connecté en tant que {self.user.name}')
+            
             # Définir le statut initial
             activity = discord.Activity(
-                type=discord.ActivityType.watching,  # En minuscules
+                type=discord.ActivityType.watching,
                 name=f"/help | {len(self.guilds)} servers"
             )
-            await self.change_presence(
-                status=discord.Status.online,
-                activity=activity
-            )
+            await self.change_presence(status=discord.Status.online, activity=activity)
             
             # Initialiser le channel de logs
-            self.log_channel = self.get_channel(int(os.getenv('LOGS_CHANNEL_ID')))
-            if self.log_channel:
-                print(f"✓ Log channel found: {self.log_channel.name}")
-                
-                # Envoyer le message de démarrage
-                embed = discord.Embed(
-                    title="🟢 Bot Online",
-                    description="Bot has started successfully!",
-                    color=0x00FF00,
-                    timestamp=datetime.utcnow()
-                )
-                await self.log_channel.send(embed=embed)
-                
-                # Démarrer la tâche de status
-                if not self.status_task:
-                    self.status_task = self.loop.create_task(self.status_check())
-            else:
-                print("✗ Log channel not found!")
-
-            try:
-                # Force sync all commands
-                print("Clearing commands...")
-                self.tree.clear_commands(guild=None)
-                print("Syncing commands...")
-                synced = await self.tree.sync()
-                print(f"Successfully synced {len(synced)} commands!")
-                
-                # List all commands
-                print("\nAvailable commands:")
-                for cmd in self.tree.get_commands():
-                    print(f"- /{cmd.name}")
-                
-                # Vérifier les modules utils
-                print("\nChecking utils modules:")
-                try:
-                    uploader = CatboxUploader()
-                    print("✓ CatboxUploader loaded")
-                except Exception as e:
-                    print(f"✗ CatboxUploader failed: {e}")
-                
-            except Exception as e:
-                print(f"Failed to sync commands: {e}")
-
+            if logs_channel_id := os.getenv('LOGS_CHANNEL_ID'):
+                self.log_channel = self.get_channel(int(logs_channel_id))
+                if self.log_channel:
+                    embed = discord.Embed(
+                        title="🟢 Bot Online",
+                        description="Bot has started successfully!",
+                        color=0x00FF00,
+                        timestamp=datetime.utcnow()
+                    )
+                    await self.log_channel.send(embed=embed)
+            
+            # Synchroniser les commandes
+            await self.sync_commands()
+            
             logging.info('Initialisation terminée')
         except Exception as e:
             logging.error(f'Erreur lors de l\'initialisation: {e}')
@@ -332,22 +303,6 @@ class MediaDownloadBot(commands.Bot):
         except Exception as e:
             await ctx.send(f"Failed to sync commands: {e}")
 
-    async def load_cogs(self):
-        """Load all cogs from the cogs directory"""
-        try:
-            print("Loading cogs...")
-            # Charger tous les cogs du dossier cogs
-            for filename in os.listdir('./cogs'):
-                if filename.endswith('.py') and not filename.startswith('__'):
-                    try:
-                        await self.load_extension(f'cogs.{filename[:-3]}')
-                        print(f"Loaded cog: {filename}")
-                    except Exception as e:
-                        print(f"Failed to load {filename}: {e}")
-            print("Cogs loaded successfully!")
-        except Exception as e:
-            print(f"Error loading cogs: {e}")
-            
     async def sync_commands(self):
         """Synchronize commands with Discord"""
         try:
@@ -377,12 +332,11 @@ class MediaDownloadBot(commands.Bot):
 def run_bot():
     """Démarrer le bot"""
     bot = MediaDownloadBot()
-    
     try:
-        print("Starting bot...")
-        bot.run(os.getenv('DISCORD_TOKEN'), log_handler=None)  # Désactive le handler de log par défaut
+        logging.info("Starting bot...")
+        bot.run(os.getenv('DISCORD_TOKEN'), log_handler=None)
     except Exception as e:
-        print(f"Failed to start bot: {e}")
+        logging.error(f"Failed to start bot: {e}")
         import traceback
         traceback.print_exc()
 
