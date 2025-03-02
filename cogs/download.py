@@ -367,6 +367,12 @@ class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logging.getLogger('bot.download')
+        # Récupérer LOGS_CHANNEL_ID de manière sécurisée
+        try:
+            self.logs_channel_id = int(os.getenv('LOGS_CHANNEL_ID')) if os.getenv('LOGS_CHANNEL_ID') else None
+        except (ValueError, TypeError):
+            self.logger.warning("LOGS_CHANNEL_ID invalid or not set")
+            self.logs_channel_id = None
 
     @app_commands.command(
         name="download",
@@ -387,17 +393,22 @@ class Download(commands.Cog):
                     content="❌ URL invalide. Veuillez fournir une URL valide."
                 )
             
-            # Log dans le canal de logs
-            if self.bot.log_channel:
-                embed = discord.Embed(
-                    title="📥 Nouvelle demande de téléchargement",
-                    description=f"URL: {url}",
-                    color=0x3498db,
-                    timestamp=datetime.utcnow()
-                )
-                embed.add_field(name="Utilisateur", value=f"{interaction.user.name} ({interaction.user.id})")
-                embed.add_field(name="Serveur", value=f"{interaction.guild.name} ({interaction.guild.id})")
-                await self.bot.log_channel.send(embed=embed)
+            # Log dans le canal de logs si configuré
+            if self.logs_channel_id:
+                try:
+                    log_channel = self.bot.get_channel(self.logs_channel_id)
+                    if log_channel:
+                        embed = discord.Embed(
+                            title="📥 Nouvelle demande de téléchargement",
+                            description=f"URL: {url}",
+                            color=0x3498db,
+                            timestamp=datetime.utcnow()
+                        )
+                        embed.add_field(name="Utilisateur", value=f"{interaction.user.name} ({interaction.user.id})")
+                        embed.add_field(name="Serveur", value=f"{interaction.guild.name} ({interaction.guild.id})")
+                        await log_channel.send(embed=embed)
+                except Exception as e:
+                    self.logger.error(f"Error sending log message: {e}")
             
             # TODO: Ajouter la logique de téléchargement ici
             successful_downloads.inc()
