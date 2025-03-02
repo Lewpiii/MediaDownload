@@ -380,7 +380,7 @@ def run_bot():
     
     try:
         print("Starting bot...")
-        bot.run(os.getenv('DISCORD_TOKEN'))
+        bot.run(os.getenv('DISCORD_TOKEN'), log_handler=None)  # Désactive le handler de log par défaut
     except Exception as e:
         print(f"Failed to start bot: {e}")
         import traceback
