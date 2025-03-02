@@ -128,7 +128,7 @@ class MediaDownloadBot(commands.Bot):
         """Attendre que le bot soit prêt avant de démarrer la rotation"""
         await self.wait_until_ready()
 
-    @commands.event
+    @commands.Cog.listener()
     async def on_ready(self):
         """Événement appelé quand le bot est prêt"""
         logging.info(f'Bot connecté en tant que {self.user.name}')
