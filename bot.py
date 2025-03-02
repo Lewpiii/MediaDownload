@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from utils.logging import Logger
 from utils.catbox import CatboxUploader
+import logging
 
 # Configuration
 load_dotenv()
@@ -36,6 +37,12 @@ except ValueError as e:
 
 # Configurer le logger
 logger = None
+
+# Configuration du logging plus détaillé
+logging.basicConfig(
+    level=logging.DEBUG,  # Changez en DEBUG pour plus de détails
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 # Définir l'intents
 intents = discord.Intents.default()
@@ -121,67 +128,74 @@ class MediaDownloadBot(commands.Bot):
         """Attendre que le bot soit prêt avant de démarrer la rotation"""
         await self.wait_until_ready()
 
+    @commands.event
     async def on_ready(self):
         """Événement appelé quand le bot est prêt"""
-        print("\n=== Bot Ready ===")
-        print(f"Logged in as {self.user.name}")
-        print(f"Bot ID: {self.user.id}")
-        print(f"Guild count: {len(self.guilds)}")
-        print("================")
-
-        # Définir le statut initial
-        activity = discord.Activity(
-            type=discord.ActivityType.watching,  # En minuscules
-            name=f"/help | {len(self.guilds)} servers"
-        )
-        await self.change_presence(
-            status=discord.Status.online,
-            activity=activity
-        )
-        
-        # Initialiser le channel de logs
-        self.log_channel = self.get_channel(int(os.getenv('LOGS_CHANNEL_ID')))
-        if self.log_channel:
-            print(f"✓ Log channel found: {self.log_channel.name}")
-            
-            # Envoyer le message de démarrage
-            embed = discord.Embed(
-                title="🟢 Bot Online",
-                description="Bot has started successfully!",
-                color=0x00FF00,
-                timestamp=datetime.utcnow()
-            )
-            await self.log_channel.send(embed=embed)
-            
-            # Démarrer la tâche de status
-            if not self.status_task:
-                self.status_task = self.loop.create_task(self.status_check())
-        else:
-            print("✗ Log channel not found!")
-
+        logging.info(f'Bot connecté en tant que {self.user.name}')
         try:
-            # Force sync all commands
-            print("Clearing commands...")
-            self.tree.clear_commands(guild=None)
-            print("Syncing commands...")
-            synced = await self.tree.sync()
-            print(f"Successfully synced {len(synced)} commands!")
+            print("\n=== Bot Ready ===")
+            print(f"Logged in as {self.user.name}")
+            print(f"Bot ID: {self.user.id}")
+            print(f"Guild count: {len(self.guilds)}")
+            print("================")
+
+            # Définir le statut initial
+            activity = discord.Activity(
+                type=discord.ActivityType.watching,  # En minuscules
+                name=f"/help | {len(self.guilds)} servers"
+            )
+            await self.change_presence(
+                status=discord.Status.online,
+                activity=activity
+            )
             
-            # List all commands
-            print("\nAvailable commands:")
-            for cmd in self.tree.get_commands():
-                print(f"- /{cmd.name}")
-            
-            # Vérifier les modules utils
-            print("\nChecking utils modules:")
+            # Initialiser le channel de logs
+            self.log_channel = self.get_channel(int(os.getenv('LOGS_CHANNEL_ID')))
+            if self.log_channel:
+                print(f"✓ Log channel found: {self.log_channel.name}")
+                
+                # Envoyer le message de démarrage
+                embed = discord.Embed(
+                    title="🟢 Bot Online",
+                    description="Bot has started successfully!",
+                    color=0x00FF00,
+                    timestamp=datetime.utcnow()
+                )
+                await self.log_channel.send(embed=embed)
+                
+                # Démarrer la tâche de status
+                if not self.status_task:
+                    self.status_task = self.loop.create_task(self.status_check())
+            else:
+                print("✗ Log channel not found!")
+
             try:
-                uploader = CatboxUploader()
-                print("✓ CatboxUploader loaded")
+                # Force sync all commands
+                print("Clearing commands...")
+                self.tree.clear_commands(guild=None)
+                print("Syncing commands...")
+                synced = await self.tree.sync()
+                print(f"Successfully synced {len(synced)} commands!")
+                
+                # List all commands
+                print("\nAvailable commands:")
+                for cmd in self.tree.get_commands():
+                    print(f"- /{cmd.name}")
+                
+                # Vérifier les modules utils
+                print("\nChecking utils modules:")
+                try:
+                    uploader = CatboxUploader()
+                    print("✓ CatboxUploader loaded")
+                except Exception as e:
+                    print(f"✗ CatboxUploader failed: {e}")
+                
             except Exception as e:
-                print(f"✗ CatboxUploader failed: {e}")
-            
+                print(f"Failed to sync commands: {e}")
+
+            logging.info('Initialisation terminée')
         except Exception as e:
-            print(f"Failed to sync commands: {e}")
+            logging.error(f'Erreur lors de l\'initialisation: {e}')
 
     async def status_check(self):
         """Vérifie périodiquement l'état du bot"""
