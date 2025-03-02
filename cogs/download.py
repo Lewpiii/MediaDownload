@@ -16,6 +16,7 @@ import shutil
 import typing
 from utils.logging import Logger
 import logging
+from counters import download_count, successful_downloads, failed_downloads
 
 # Configurer un logger basique
 logger = logging.getLogger('download')
@@ -360,4 +361,53 @@ class DownloadCog(commands.Cog):
             for i in range(1, chunk_number):
                 temp_path = f"{file_path}.part{i}"
                 if os.path.exists(temp_path):
-                    os.remove(temp_path) 
+                    os.remove(temp_path)
+
+class Download(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.logger = logging.getLogger('bot.download')
+
+    @app_commands.command(
+        name="download",
+        description="Télécharge une vidéo ou une image depuis un lien"
+    )
+    async def download(self, interaction: discord.Interaction, url: str):
+        try:
+            # Incrémenter le compteur de téléchargements
+            download_count.inc()
+            
+            # Message initial
+            await interaction.response.send_message("🔄 Traitement de votre demande...")
+            
+            # Vérification de l'URL
+            if not url.startswith(('http://', 'https://')):
+                failed_downloads.inc()
+                return await interaction.edit_original_response(
+                    content="❌ URL invalide. Veuillez fournir une URL valide."
+                )
+            
+            # Log dans le canal de logs
+            if self.bot.log_channel:
+                embed = discord.Embed(
+                    title="📥 Nouvelle demande de téléchargement",
+                    description=f"URL: {url}",
+                    color=0x3498db,
+                    timestamp=datetime.utcnow()
+                )
+                embed.add_field(name="Utilisateur", value=f"{interaction.user.name} ({interaction.user.id})")
+                embed.add_field(name="Serveur", value=f"{interaction.guild.name} ({interaction.guild.id})")
+                await self.bot.log_channel.send(embed=embed)
+            
+            # TODO: Ajouter la logique de téléchargement ici
+            successful_downloads.inc()
+            await interaction.edit_original_response(
+                content=f"✅ URL reçue : {url}\nEn cours de développement..."
+            )
+
+        except Exception as e:
+            failed_downloads.inc()
+            self.logger.error(f"Erreur lors du téléchargement: {e}")
+            await interaction.edit_original_response(
+                content="❌ Une erreur est survenue lors du téléchargement."
+            ) 
