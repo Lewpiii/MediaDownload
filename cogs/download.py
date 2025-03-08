@@ -17,14 +17,10 @@ import typing
 from utils.logging import Logger
 import logging
 from counters import download_count, successful_downloads, failed_downloads
+from utils.download_utils import DownloadUtils  # Nouvel import
 
-# Configurer un logger basique
-logger = logging.getLogger('download')
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+# Configuration du logger
+logger = logging.getLogger('bot.download')
 
 async def setup(bot):
     # Ne pas essayer d'initialiser logger ici
@@ -33,9 +29,15 @@ async def setup(bot):
 class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.logger = logging.getLogger('bot.download')
-        # Ne pas essayer d'initialiser logger ici
-        self.logs_channel_id = None
+        self.logger = logger
+        
+        # Initialisation sécurisée du channel ID
+        try:
+            channel_id = os.getenv('LOGS_CHANNEL_ID')
+            self.logs_channel_id = int(channel_id) if channel_id else None
+        except (ValueError, TypeError):
+            self.logger.warning("Invalid LOGS_CHANNEL_ID, logging will be disabled")
+            self.logs_channel_id = None
 
     async def cog_load(self):
         """Appelé quand le cog est chargé"""
