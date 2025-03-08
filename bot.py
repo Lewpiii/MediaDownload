@@ -111,6 +111,15 @@ class MediaDownloadBot(commands.Bot):
                         print(f"✗ Failed to load {filename}: {str(e)}")
             print("===================\n")
             
+            # Synchroniser les commandes
+            print("Synchronizing commands...")
+            await self.tree.sync()
+            commands = await self.tree.fetch_commands()
+            print(f"\n=== Registered Commands ===")
+            for cmd in commands:
+                print(f"✓ /{cmd.name} - {cmd.description}")
+            print("=========================\n")
+            
             # Démarrer la rotation du statut après le chargement des cogs
             try:
                 self.rotate_status.start()
@@ -184,9 +193,6 @@ class MediaDownloadBot(commands.Bot):
                         timestamp=datetime.utcnow()
                     )
                     await self.log_channel.send(embed=embed)
-            
-            # Synchroniser les commandes
-            await self.sync_commands()
             
             logging.info('Initialisation terminée')
         except Exception as e:
