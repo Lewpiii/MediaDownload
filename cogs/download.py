@@ -55,7 +55,7 @@ class Download(commands.Cog):
         name="download",
         description="Télécharge une vidéo ou une image depuis un lien"
     )
-    async def download(self, interaction: discord.Interaction, url: str):
+    async def download_command(self, interaction: discord.Interaction, url: str):
         try:
             # Incrémenter le compteur de téléchargements
             download_count.inc()
