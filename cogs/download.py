@@ -19,28 +19,33 @@ import logging
 from counters import download_count, successful_downloads, failed_downloads
 from utils.download_utils import DownloadUtils  # Nouvel import
 
-# Configuration du logger
+# Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
+logger.setLevel(logging.DEBUG)  # Augmente le niveau de détail
 
 async def setup(bot):
-    # Ne pas essayer d'initialiser logger ici
+    logger.debug("Setting up Download cog")  # Log du setup
     await bot.add_cog(Download(bot))
+    logger.debug("Download cog added successfully")  # Log de confirmation
 
 class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logger
+        logger.debug("Download cog initialized")  # Log d'initialisation
         
         # Initialisation sécurisée du channel ID
         try:
             channel_id = os.getenv('LOGS_CHANNEL_ID')
             self.logs_channel_id = int(channel_id) if channel_id else None
+            logger.debug(f"Logs channel ID set to: {self.logs_channel_id}")  # Log du channel ID
         except (ValueError, TypeError):
             self.logger.warning("Invalid LOGS_CHANNEL_ID, logging will be disabled")
             self.logs_channel_id = None
 
     async def cog_load(self):
         """Appelé quand le cog est chargé"""
+        logger.debug("Download cog is being loaded")  # Log du chargement
         try:
             if channel_id := os.getenv('LOGS_CHANNEL_ID'):
                 self.logs_channel_id = int(channel_id)
@@ -56,6 +61,7 @@ class Download(commands.Cog):
         description="Télécharge une vidéo ou une image depuis un lien"
     )
     async def download_command(self, interaction: discord.Interaction, url: str):
+        logger.debug("Download command called")  # Log de l'appel de commande
         try:
             # Incrémenter le compteur de téléchargements
             download_count.inc()
