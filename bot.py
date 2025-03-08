@@ -54,11 +54,11 @@ logging.info(f"Token trouvé : {'✓' if os.getenv('DISCORD_TOKEN') else '✗'}"
 
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
-        print("\n=== Media Download Bot Status ===")
-        print(f"Starting bot initialization...")
-        print(f"Discord.py version: {discord.__version__}")
-        print(f"Python version: {sys.version.split()[0]}")
-        print("===============================\n")
+        print("\n=== Debug Discord Bot ===")
+        print(f"Token exists: {'Yes' if os.getenv('DISCORD_TOKEN') else 'No'}")
+        print(f"Logs Channel ID: {os.getenv('LOGS_CHANNEL_ID')}")
+        print(f"Webhook URL exists: {'Yes' if os.getenv('WEBHOOK_URL') else 'No'}")
+        print("=======================\n")
         
         intents = discord.Intents.default()
         intents.message_content = True
@@ -80,7 +80,15 @@ class MediaDownloadBot(commands.Bot):
         self.log_channel = None
         self.status_task = None
         self.status_index = 0
-        self.log_webhook_url = os.getenv('LOG_WEBHOOK_URL')
+        self.log_webhook_url = os.getenv('WEBHOOK_URL')
+
+        # Gérer LOGS_CHANNEL_ID de manière sécurisée
+        try:
+            logs_channel_id = os.getenv('LOGS_CHANNEL_ID')
+            self.logs_channel_id = int(logs_channel_id) if logs_channel_id else None
+        except (ValueError, TypeError):
+            logging.warning("Invalid LOGS_CHANNEL_ID, logging will be disabled")
+            self.logs_channel_id = None
 
     async def setup_hook(self):
         """Configuration initiale du bot"""
