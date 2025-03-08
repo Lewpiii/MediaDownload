@@ -100,13 +100,16 @@ class MediaDownloadBot(commands.Bot):
                 os.makedirs('./cogs')
                 logging.info("Created cogs directory")
             
+            print("\n=== Loading Cogs ===")
             for filename in os.listdir('./cogs'):
                 if filename.endswith('.py') and not filename.startswith('__'):
                     try:
+                        print(f"Attempting to load: {filename}")
                         await self.load_extension(f'cogs.{filename[:-3]}')
-                        logging.info(f"✓ Loaded cog: {filename}")
+                        print(f"✓ Successfully loaded: {filename}")
                     except Exception as e:
-                        logging.error(f"✗ Failed to load {filename}: {e}")
+                        print(f"✗ Failed to load {filename}: {str(e)}")
+            print("===================\n")
             
             # Démarrer la rotation du statut après le chargement des cogs
             try:
