@@ -2,56 +2,17 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import os
-import aiohttp
+import logging
+from datetime import datetime
 import tempfile
 import zipfile
-import time
-from datetime import datetime
-from config import MEDIA_TYPES, MAX_DIRECT_DOWNLOAD_SIZE, CATEGORIES
+import aiohttp
 from utils.catbox import CatboxUploader
-from typing import Dict, List
-import asyncio
-import aiofiles
-import shutil
-import typing
-from utils.logging import Logger
-import logging
-from topggpy import DBLClient  # Nouveau package correct
-
-# Configuration du logger avec plus de détails
-logger = logging.getLogger('bot.download')
-logger.setLevel(logging.DEBUG)  # Augmente le niveau de détail
 
 # Configuration
 MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB limite Discord
-
-async def setup(bot):
-    logger.info("Starting Download cog setup")
-    try:
-        cog = Download(bot)
-        await bot.add_cog(cog)
-        logger.info("Download cog added successfully")
-        
-        # Force sync for this specific command
-        try:
-            cmd = bot.tree.get_command("download")
-            if not cmd:
-                logger.warning("Download command not found in tree")
-            else:
-                logger.info("Download command found in tree")
-            
-            # Sync commands
-            await bot.tree.sync()
-            logger.info("Commands synchronized")
-            
-            # Verify after sync
-            commands = await bot.tree.fetch_commands()
-            logger.info(f"Available commands after sync: {[cmd.name for cmd in commands]}")
-        except Exception as e:
-            logger.error(f"Error during command sync: {e}")
-    except Exception as e:
-        logger.error(f"Error setting up Download cog: {e}")
-        raise
+logger = logging.getLogger('bot.download')
+logger.setLevel(logging.DEBUG)
 
 class Download(commands.Cog):
     def __init__(self, bot):
@@ -62,90 +23,6 @@ class Download(commands.Cog):
             'videos': ['.mp4', '.webm', '.mov'],
             'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
         }
-        # Initialisation de top.gg avec le nouveau client
-        self.topgg_client = None
-        token = os.getenv('TOPGG_TOKEN')
-        logger.debug(f"Initializing Top.gg client with token present: {bool(token)}")
-        
-        if token:
-            try:
-                self.topgg_client = DBLClient(bot, token)
-                logger.info("Top.gg client successfully initialized")
-            except Exception as e:
-                logger.error(f"Failed to initialize Top.gg client: {e}")
-                logger.error(f"Error details: {str(e)}")
-        else:
-            logger.error("TOPGG_TOKEN environment variable is missing or invalid")
-
-        # Initialisation sécurisée du channel ID
-        try:
-            channel_id = os.getenv('LOGS_CHANNEL_ID')
-            self.logs_channel_id = int(channel_id) if channel_id else None
-            logger.debug(f"Logs channel ID set to: {self.logs_channel_id}")  # Log du channel ID
-        except (ValueError, TypeError):
-            self.logger.warning("Invalid LOGS_CHANNEL_ID, logging will be disabled")
-            self.logs_channel_id = None
-
-    async def cog_load(self):
-        """Appelé quand le cog est chargé"""
-        logger.info("Loading Download cog")
-        try:
-            # Synchroniser les commandes du cog
-            logger.info("Attempting to sync commands for Download cog")
-            if not hasattr(self.bot, 'tree'):
-                logger.error("Bot doesn't have a command tree!")
-                return
-            
-            # Vérifier si la commande est dans l'arbre
-            commands = await self.bot.tree.fetch_commands()
-            logger.info(f"Current commands: {[cmd.name for cmd in commands]}")
-        except Exception as e:
-            logger.error(f"Error fetching commands: {e}")
-
-    async def download_attachment(self, url: str, temp_dir: str) -> str:
-        """Télécharge un fichier depuis une URL"""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    file_name = url.split('/')[-1]
-                    file_path = os.path.join(temp_dir, file_name)
-                    with open(file_path, 'wb') as f:
-                        f.write(await response.read())
-                    return file_path
-                return None
-
-    async def check_vote(self, user_id: int) -> bool:
-        """Vérifie si l'utilisateur a voté"""
-        if self.topgg_client is None:
-            logger.error("Top.gg client not initialized")
-            return False
-
-        try:
-            has_voted = await self.topgg_client.has_voted(user_id)  # Méthode correcte
-            logger.debug(f"Vote check for user {user_id}: {has_voted}")
-            return has_voted
-        except Exception as e:
-            logger.error(f"Error checking vote status: {e}")
-            logger.error(f"Error details: {str(e)}")
-            return False
-
-    async def upload_to_catbox(self, file_path: str) -> str:
-        """Upload un fichier vers Catbox"""
-        try:
-            uploader = CatboxUploader()
-            filename = os.path.basename(file_path)
-            logger.debug(f"Uploading to Catbox: {filename}")
-            
-            # Lire le contenu du fichier
-            with open(file_path, 'rb') as f:
-                file_data = f.read()
-            
-            # Uploader avec le contenu du fichier
-            return await uploader.upload_file(filename=filename, file_data=file_data)
-            
-        except Exception as e:
-            logger.error(f"Error uploading to Catbox: {e}")
-            raise
 
     @app_commands.command(
         name="download",
@@ -156,16 +33,11 @@ class Download(commands.Cog):
         app_commands.Choice(name="🎥 Videos", value="videos"),
         app_commands.Choice(name="📁 All", value="all")
     ])
-    @app_commands.describe(
-        type="Type de médias à télécharger",
-        messages="Nombre de messages à analyser (0 = tous les messages)"
-    )
     async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 0):
         try:
-            await interaction.response.defer(thinking=True)  # Ajout de thinking=True pour les longues opérations
+            await interaction.response.defer(thinking=True)
             logger.debug(f"Starting download with type: {type}, messages: {messages}")
 
-            # Créer un dossier temporaire
             with tempfile.TemporaryDirectory() as temp_dir:
                 downloaded_files = []
                 
@@ -173,7 +45,6 @@ class Download(commands.Cog):
                 message_limit = None if messages <= 0 else messages
                 logger.debug(f"Fetching messages from channel {interaction.channel.name} with limit: {message_limit}")
                 
-                # Message d'information pour l'utilisateur si on cherche tous les messages
                 if message_limit is None:
                     await interaction.followup.send("🔍 Recherche dans tous les messages du canal... Cela peut prendre un moment.")
                 
@@ -183,7 +54,6 @@ class Download(commands.Cog):
                         channel_messages.append(msg)
                     logger.debug(f"Successfully fetched {len(channel_messages)} messages")
                     
-                    # Message de progression
                     await interaction.followup.send(f"📥 {len(channel_messages)} messages analysés, traitement des fichiers en cours...")
                 except Exception as e:
                     logger.error(f"Error fetching messages: {e}")
@@ -195,7 +65,6 @@ class Download(commands.Cog):
                     for attachment in message.attachments:
                         file_ext = os.path.splitext(attachment.filename)[1].lower()
                         if file_ext in self.media_types[type]:
-                            logger.debug(f"Found matching file: {attachment.filename}")
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(attachment.url) as response:
                                     if response.status == 200:
@@ -214,57 +83,27 @@ class Download(commands.Cog):
                     await interaction.followup.send(msg)
                     return
 
-                # Trier les fichiers par date de création
-                downloaded_files.sort(key=lambda x: os.path.getctime(x))
-                
-                # Créer des sous-dossiers dans le zip
+                # Créer le zip
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_name = f"media_{type}_{timestamp}.zip"
                 zip_path = os.path.join(temp_dir, zip_name)
                 
                 with zipfile.ZipFile(zip_path, 'w') as zip_file:
-                    # Créer des sous-dossiers pour chaque type
-                    if type == 'all':
-                        # Trier par extension
-                        for file in downloaded_files:
-                            ext = os.path.splitext(file)[1].lower()
-                            if ext in self.media_types['images']:
-                                folder = "images"
-                            elif ext in self.media_types['videos']:
-                                folder = "videos"
-                            else:
-                                folder = "other"
-                            zip_file.write(file, f"{folder}/{os.path.basename(file)}")
-                    else:
-                        # Un seul type, pas besoin de sous-dossiers
-                        for file in downloaded_files:
-                            zip_file.write(file, os.path.basename(file))
+                    for file in downloaded_files:
+                        zip_file.write(file, os.path.basename(file))
 
                 # Vérifier la taille du zip
                 file_size = os.path.getsize(zip_path)
                 logger.debug(f"Zip size: {file_size / (1024*1024):.2f}MB")
 
                 if file_size > MAX_DISCORD_SIZE:
-                    # Vérifier si l'utilisateur a voté
-                    has_voted = await self.check_vote(interaction.user.id)
-                    if not has_voted:
-                        vote_url = f"https://top.gg/bot/{self.bot.user.id}/vote"
-                        embed = discord.Embed(
-                            title="⭐ Vote requis !",
-                            description=(
-                                f"Le fichier fait {file_size / (1024*1024):.2f}MB et dépasse la limite Discord de 25MB.\n"
-                                f"Pour télécharger des fichiers plus volumineux, votez pour le bot sur top.gg !\n"
-                                f"[Cliquez ici pour voter]({vote_url})"
-                            ),
-                            color=discord.Color.gold()
-                        )
-                        await interaction.followup.send(embed=embed)
-                        return
-
-                    # Si l'utilisateur a voté, utiliser Catbox
-                    logger.debug("User has voted, using Catbox")
+                    # Upload vers Catbox
+                    logger.debug("File too large, using Catbox")
                     try:
-                        url = await self.upload_to_catbox(zip_path)
+                        uploader = CatboxUploader()
+                        with open(zip_path, 'rb') as f:
+                            file_data = f.read()
+                        url = await uploader.upload_file(filename=zip_name, file_data=file_data)
                         await interaction.followup.send(
                             f"📦 Fichier volumineux ({file_size / (1024*1024):.2f}MB).\n"
                             f"Téléchargez-le ici : {url}"
@@ -286,143 +125,5 @@ class Download(commands.Cog):
             logger.error(f"Error in download_media: {e}")
             await interaction.followup.send("❌ Une erreur est survenue lors du téléchargement.")
 
-    @app_commands.command(name="checkvote", description="Check your vote status")
-    async def check_vote_status(self, interaction: discord.Interaction):
-        """Commande de debug pour vérifier le statut de vote"""
-        await interaction.response.defer(ephemeral=True)
-        
-        has_voted = await self.check_vote(interaction.user.id)
-        
-        embed = discord.Embed(
-            title="Vote Status Check",
-            description=(
-                f"User ID: {interaction.user.id}\n"
-                f"Has voted: {has_voted}\n"
-                f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-            ),
-            color=0x00FF00 if has_voted else 0xFF0000
-        )
-        
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-    def format_stats(self, stats: Dict) -> str:
-        """Formate les statistiques en message lisible"""
-        total_size = format_size(stats['total_size'])
-        response = [
-            "✅ Download Ready!",
-            f"📁 Total: {stats['total']} files ({total_size})\n"
-        ]
-
-        # Statistiques par type principal
-        response.append("📊 By Type:")
-        for media_type, type_stats in stats['types'].items():
-            if type_stats['count'] > 0:
-                type_size = format_size(type_stats['size'])
-                response.append(f"• {media_type}: {type_stats['count']} files ({type_size})")
-
-        # Détails par catégorie
-        response.append("\n📑 Details:")
-        for category, cat_stats in stats['categories'].items():
-            if category != "Others" and cat_stats['count'] > 0:
-                cat_size = format_size(cat_stats['size'])
-                response.append(f"• {category}: {cat_stats['count']} files ({cat_size})")
-                
-                # Sous-catégories
-                for subcat, subcat_stats in cat_stats['subcategories'].items():
-                    if subcat_stats['count'] > 0:
-                        subcat_size = format_size(subcat_stats['size'])
-                        response.append(f"  - {subcat}: {subcat_stats['count']} ({subcat_size})")
-
-        # Fichiers non classés
-        if "Others" in stats['categories'] and stats['categories']['Others']['count'] > 0:
-            others_size = format_size(stats['categories']['Others']['size'])
-            response.append(f"\n📦 Unclassified: {stats['categories']['Others']['count']} files ({others_size})")
-
-        return "\n".join(response)
-
-    async def upload_file(self, filename: str, content: bytes):
-        """Upload a file to the configured service"""
-        try:
-            # Ensure filename is str
-            if isinstance(filename, bytes):
-                filename = filename.decode('utf-8')
-            
-            # Ensure content is bytes
-            if not isinstance(content, bytes):
-                content = bytes(content)
-                
-            return await self.uploader.upload_file(filename, content)
-        except Exception as e:
-            print(f"Error uploading file: {str(e)}")
-            raise
-
-    async def send_large_file(self, interaction, file_path):
-        """Send a large file in chunks using streaming."""
-        CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB chunks
-        MAX_RETRIES = 3
-        
-        try:
-            file_size = os.path.getsize(file_path)
-            
-            # Si le fichier est petit, l'envoyer directement
-            if file_size <= CHUNK_SIZE:
-                await interaction.followup.send(file=discord.File(file_path))
-                return
-
-            # Pour les gros fichiers, utiliser le streaming
-            async with aiofiles.open(file_path, 'rb') as f:
-                chunk_number = 1
-                total_chunks = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
-                
-                while True:
-                    chunk = await f.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                        
-                    # Créer un fichier temporaire pour le chunk
-                    temp_path = f"{file_path}.part{chunk_number}"
-                    try:
-                        async with aiofiles.open(temp_path, 'wb') as temp_file:
-                            await temp_file.write(chunk)
-                        
-                        # Envoyer avec retry en cas d'erreur
-                        for attempt in range(MAX_RETRIES):
-                            try:
-                                await interaction.followup.send(
-                                    content=f"Sending part {chunk_number}/{total_chunks}...",
-                                    file=discord.File(temp_path)
-                                )
-                                break
-                            except Exception as e:
-                                if attempt == MAX_RETRIES - 1:
-                                    raise
-                                await asyncio.sleep(1)
-                                
-                    finally:
-                        # Nettoyer le fichier temporaire
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
-                    
-                    chunk_number += 1
-                    
-                    # Libérer la mémoire explicitement
-                    del chunk
-                    await asyncio.sleep(0.5)  # Petit délai entre les chunks
-                    
-        except Exception as e:
-            print(f"Error in send_large_file: {e}")
-            raise
-        finally:
-            # S'assurer que tous les fichiers temporaires sont nettoyés
-            for i in range(1, chunk_number):
-                temp_path = f"{file_path}.part{i}"
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-def format_size(size_bytes: int) -> str:
-    """Convertit les bytes en format lisible"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB" 
+async def setup(bot):
+    await bot.add_cog(Download(bot)) 
