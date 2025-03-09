@@ -42,16 +42,15 @@ class Download(commands.Cog):
             'videos': ['.mp4', '.webm', '.mov'],
             'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
         }
-        # Initialisation sécurisée de top.gg
-        self.has_topgg = False
+        # Initialisation de top.gg
+        self.topgg = None
         try:
             import topgg
-            if token := os.getenv('TOP_GG_TOKEN'):
+            if token := os.getenv('TOPGG_TOKEN'):
                 self.topgg = topgg.DBLClient(bot, token)
-                self.has_topgg = True
                 logger.info("Top.gg integration enabled")
             else:
-                logger.warning("TOP_GG_TOKEN not found")
+                logger.warning("TOPGG_TOKEN not found")
         except ImportError:
             logger.warning("topgg module not installed")
 
@@ -93,14 +92,23 @@ class Download(commands.Cog):
                 return None
 
     async def check_vote(self, user_id: int) -> bool:
-        """Vérifie si l'utilisateur a voté pour le bot"""
-        if not self.has_topgg:
-            return True  # Si top.gg n'est pas configuré, on autorise
+        """Vérifie si l'utilisateur a voté"""
+        if self.topgg is None:
+            logger.warning("Top.gg client not initialized")
+            return False  # Si pas de top.gg, on refuse
+
         try:
-            return await self.topgg.get_user_vote(user_id)
+            has_voted = await self.topgg.get_user_vote(user_id)
+            logger.debug(f"User {user_id} vote status: {has_voted}")
+            if has_voted:
+                logger.info(f"User {user_id} has voted")
+                return True
+            else:
+                logger.info(f"User {user_id} has not voted")
+                return False
         except Exception as e:
             logger.error(f"Error checking vote: {e}")
-            return True  # En cas d'erreur, on autorise
+            return False  # En cas d'erreur, on refuse
 
     async def upload_to_catbox(self, file_path: str) -> str:
         """Upload un fichier vers Catbox"""
@@ -187,11 +195,31 @@ class Download(commands.Cog):
                     await interaction.followup.send(msg)
                     return
 
-                # Créer le zip
-                zip_path = os.path.join(temp_dir, f"media_{type}.zip")
+                # Trier les fichiers par date de création
+                downloaded_files.sort(key=lambda x: os.path.getctime(x))
+                
+                # Créer des sous-dossiers dans le zip
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                zip_name = f"media_{type}_{timestamp}.zip"
+                zip_path = os.path.join(temp_dir, zip_name)
+                
                 with zipfile.ZipFile(zip_path, 'w') as zip_file:
-                    for file in downloaded_files:
-                        zip_file.write(file, os.path.basename(file))
+                    # Créer des sous-dossiers pour chaque type
+                    if type == 'all':
+                        # Trier par extension
+                        for file in downloaded_files:
+                            ext = os.path.splitext(file)[1].lower()
+                            if ext in self.media_types['images']:
+                                folder = "images"
+                            elif ext in self.media_types['videos']:
+                                folder = "videos"
+                            else:
+                                folder = "other"
+                            zip_file.write(file, f"{folder}/{os.path.basename(file)}")
+                    else:
+                        # Un seul type, pas besoin de sous-dossiers
+                        for file in downloaded_files:
+                            zip_file.write(file, os.path.basename(file))
 
                 # Vérifier la taille du zip
                 file_size = os.path.getsize(zip_path)
