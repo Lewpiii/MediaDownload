@@ -18,7 +18,6 @@ from utils.logging import Logger
 import logging
 from counters import download_count, successful_downloads, failed_downloads
 from utils.download_utils import DownloadUtils  # Nouvel import
-import topgg
 
 # Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
@@ -26,7 +25,6 @@ logger.setLevel(logging.DEBUG)  # Augmente le niveau de détail
 
 # Configuration
 MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB limite Discord
-TOPGG_TOKEN = os.getenv('TOP_GG_TOKEN')
 
 async def setup(bot):
     logger.info("Setting up Download cog")  # Log de setup
@@ -41,9 +39,24 @@ class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logger
-        self.topgg = topgg.DBLClient(bot, TOPGG_TOKEN)
-        logger.info("Download cog initialized")  # Log d'initialisation
-        
+        self.media_types = {
+            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+            'videos': ['.mp4', '.webm', '.mov'],
+            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
+        }
+        # Initialisation sécurisée de top.gg
+        self.has_topgg = False
+        try:
+            import topgg
+            if token := os.getenv('TOP_GG_TOKEN'):
+                self.topgg = topgg.DBLClient(bot, token)
+                self.has_topgg = True
+                logger.info("Top.gg integration enabled")
+            else:
+                logger.warning("TOP_GG_TOKEN not found")
+        except ImportError:
+            logger.warning("topgg module not installed")
+
         # Initialisation sécurisée du channel ID
         try:
             channel_id = os.getenv('LOGS_CHANNEL_ID')
@@ -52,12 +65,6 @@ class Download(commands.Cog):
         except (ValueError, TypeError):
             self.logger.warning("Invalid LOGS_CHANNEL_ID, logging will be disabled")
             self.logs_channel_id = None
-
-        self.media_types = {
-            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
-            'videos': ['.mp4', '.webm', '.mov'],
-            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
-        }
 
     async def cog_load(self):
         """Appelé quand le cog est chargé"""
@@ -89,11 +96,13 @@ class Download(commands.Cog):
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté pour le bot"""
+        if not self.has_topgg:
+            return True  # Si top.gg n'est pas configuré, on autorise
         try:
             return await self.topgg.get_user_vote(user_id)
         except Exception as e:
             logger.error(f"Error checking vote: {e}")
-            return False
+            return True  # En cas d'erreur, on autorise
 
     @app_commands.command(
         name="download",
