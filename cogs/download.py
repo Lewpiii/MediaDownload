@@ -16,7 +16,7 @@ import shutil
 import typing
 from utils.logging import Logger
 import logging
-import dbl as topgg  # Import de dblpy avec alias topgg
+import dbl  # Import direct de dbl
 
 # Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
@@ -43,19 +43,19 @@ class Download(commands.Cog):
             'videos': ['.mp4', '.webm', '.mov'],
             'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
         }
-        # Initialisation de top.gg avec plus de logs
-        self.topgg = None
+        # Initialisation de top.gg
+        self.dbl_client = None
         token = os.getenv('TOPGG_TOKEN')
-        logger.debug(f"TOPGG_TOKEN present: {bool(token)}")
+        logger.debug(f"Initializing DBL client with token present: {bool(token)}")
         
         if token:
             try:
-                self.topgg = topgg.DBLClient(bot, token)
-                logger.info("Top.gg client successfully initialized")
+                self.dbl_client = dbl.DBLClient(bot, token)
+                logger.info("DBL client successfully initialized")
             except Exception as e:
-                logger.error(f"Failed to initialize top.gg client: {e}")
+                logger.error(f"Failed to initialize DBL client: {e}")
         else:
-            logger.error("TOPGG_TOKEN environment variable is missing")
+            logger.error("TOPGG_TOKEN environment variable is missing or invalid")
 
         # Initialisation sécurisée du channel ID
         try:
@@ -96,12 +96,12 @@ class Download(commands.Cog):
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté"""
-        if self.topgg is None:
-            logger.error("Top.gg client not initialized - Check your TOPGG_TOKEN")
+        if self.dbl_client is None:
+            logger.error("DBL client not initialized")
             return False
 
         try:
-            has_voted = await self.topgg.get_user_vote(user_id)
+            has_voted = await self.dbl_client.get_user_vote(user_id)
             logger.debug(f"Vote check for user {user_id}: {has_voted}")
             return has_voted
         except Exception as e:
