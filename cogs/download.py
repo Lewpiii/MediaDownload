@@ -16,8 +16,6 @@ import shutil
 import typing
 from utils.logging import Logger
 import logging
-from counters import download_count, successful_downloads, failed_downloads
-from utils.download_utils import DownloadUtils  # Nouvel import
 
 # Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
@@ -214,10 +212,7 @@ class Download(commands.Cog):
                         file=discord.File(zip_path)
                     )
 
-                successful_downloads.inc()
-
         except Exception as e:
-            failed_downloads.inc()
             logger.error(f"Error in download_media: {e}")
             await interaction.followup.send("❌ Une erreur est survenue lors du téléchargement.")
 
