@@ -106,7 +106,9 @@ class Download(commands.Cog):
         """Upload un fichier vers Catbox"""
         try:
             uploader = CatboxUploader()
-            return await uploader.upload_file(file_path)
+            filename = os.path.basename(file_path)  # Obtient le nom du fichier depuis le chemin
+            logger.debug(f"Uploading to Catbox: {filename}")
+            return await uploader.upload_file(filename=file_path)  # Spécifie l'argument nommé
         except Exception as e:
             logger.error(f"Error uploading to Catbox: {e}")
             raise
