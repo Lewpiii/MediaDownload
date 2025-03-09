@@ -18,10 +18,15 @@ from utils.logging import Logger
 import logging
 from counters import download_count, successful_downloads, failed_downloads
 from utils.download_utils import DownloadUtils  # Nouvel import
+import topgg
 
 # Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
 logger.setLevel(logging.DEBUG)  # Augmente le niveau de détail
+
+# Configuration
+MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB limite Discord
+TOPGG_TOKEN = os.getenv('TOP_GG_TOKEN')
 
 async def setup(bot):
     logger.debug("Setting up Download cog")  # Log du setup
@@ -32,6 +37,7 @@ class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logger
+        self.topgg = topgg.DBLClient(bot, TOPGG_TOKEN)
         logger.debug("Download cog initialized")  # Log d'initialisation
         
         # Initialisation sécurisée du channel ID
@@ -42,6 +48,12 @@ class Download(commands.Cog):
         except (ValueError, TypeError):
             self.logger.warning("Invalid LOGS_CHANNEL_ID, logging will be disabled")
             self.logs_channel_id = None
+
+        self.media_types = {
+            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+            'videos': ['.mp4', '.webm', '.mov'],
+            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
+        }
 
     async def cog_load(self):
         """Appelé quand le cog est chargé"""
@@ -55,6 +67,26 @@ class Download(commands.Cog):
         except ValueError:
             self.logger.warning("Invalid LOGS_CHANNEL_ID, logging disabled")
             self.logs_channel_id = None
+
+    async def download_attachment(self, url: str, temp_dir: str) -> str:
+        """Télécharge un fichier depuis une URL"""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    file_name = url.split('/')[-1]
+                    file_path = os.path.join(temp_dir, file_name)
+                    with open(file_path, 'wb') as f:
+                        f.write(await response.read())
+                    return file_path
+                return None
+
+    async def check_vote(self, user_id: int) -> bool:
+        """Vérifie si l'utilisateur a voté pour le bot"""
+        try:
+            return await self.topgg.get_user_vote(user_id)
+        except Exception as e:
+            logger.error(f"Error checking vote: {e}")
+            return False
 
     @app_commands.command(
         name="download",
@@ -71,104 +103,78 @@ class Download(commands.Cog):
         app_commands.Choice(name="All messages", value=0),
     ])
     async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 100):
-        logger.debug(f"Download media command called with type: {type}, messages: {messages}")
         try:
             await interaction.response.defer()
-            
-            # Récupérer les messages
-            limit = None if messages == 0 else messages
-            attachments = []
-            
-            async for message in interaction.channel.history(limit=limit):
-                attachments.extend(message.attachments)
+            logger.debug(f"Starting download with type: {type}, messages: {messages}")
 
-            if not attachments:
-                await interaction.followup.send("❌ No attachments found!")
-                return
+            # Créer un dossier temporaire
+            with tempfile.TemporaryDirectory() as temp_dir:
+                downloaded_files = []
+                
+                # Récupérer les messages
+                channel_messages = [msg async for msg in interaction.channel.history(limit=messages)]
+                
+                # Télécharger les fichiers
+                for message in channel_messages:
+                    for attachment in message.attachments:
+                        file_ext = os.path.splitext(attachment.filename)[1].lower()
+                        if file_ext in self.media_types[type]:
+                            if file_path := await self.download_attachment(attachment.url, temp_dir):
+                                downloaded_files.append(file_path)
 
-            await self.process_attachments(interaction, attachments, type)
+                if not downloaded_files:
+                    await interaction.followup.send("❌ Aucun média trouvé dans les messages récents.")
+                    return
 
-        except Exception as e:
-            print(f"Error in download_media: {e}")
-            await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+                # Créer le zip
+                zip_path = os.path.join(temp_dir, f"media_{type}.zip")
+                with zipfile.ZipFile(zip_path, 'w') as zip_file:
+                    for file in downloaded_files:
+                        zip_file.write(file, os.path.basename(file))
 
-    async def process_attachments(self, interaction, attachments, type):
-        """Traite les attachments avec streaming sur SSD"""
-        try:
-            total_files = len(attachments)
-            processed = 0
-            
-            # Utiliser un dossier temporaire sur le SSD
-            temp_dir = '/home/botuser/discord-bot/temp'
-            os.makedirs(temp_dir, exist_ok=True)
-            
-            # Créer un sous-dossier unique pour cette opération
-            session_dir = os.path.join(temp_dir, f'download_{int(time.time())}')
-            os.makedirs(os.path.join(session_dir, "Images"), exist_ok=True)
-            os.makedirs(os.path.join(session_dir, "Videos"), exist_ok=True)
+                # Vérifier la taille du zip
+                file_size = os.path.getsize(zip_path)
+                logger.debug(f"Zip size: {file_size / (1024*1024):.2f}MB")
 
-            try:
-                status_message = await interaction.followup.send(
-                    f"⏳ Processing 0/{total_files} files...",
-                    wait=True
-                )
+                if file_size > MAX_DISCORD_SIZE:
+                    # Vérifier si l'utilisateur a voté
+                    has_voted = await self.check_vote(interaction.user.id)
+                    if not has_voted:
+                        vote_url = f"https://top.gg/bot/{self.bot.user.id}/vote"
+                        embed = discord.Embed(
+                            title="⭐ Vote requis !",
+                            description=(
+                                f"Le fichier fait {file_size / (1024*1024):.2f}MB et dépasse la limite Discord de 25MB.\n"
+                                f"Pour télécharger des fichiers plus volumineux, votez pour le bot sur top.gg !\n"
+                                f"[Cliquez ici pour voter]({vote_url})"
+                            ),
+                            color=discord.Color.gold()
+                        )
+                        await interaction.followup.send(embed=embed)
+                        return
 
-                # Traiter chaque fichier
-                for attachment in attachments:
-                    ext = os.path.splitext(attachment.filename.lower())[1]
-                    if ((type == "images" and ext in self.bot.media_types['images']) or
-                        (type == "videos" and ext in self.bot.media_types['videos']) or
-                        (type == "all" and ext in self.bot.media_types['all'])):
-                        
-                        # Déterminer le dossier de destination
-                        folder = "Images" if ext in self.bot.media_types['images'] else "Videos"
-                        file_path = os.path.join(session_dir, folder, attachment.filename)
-                        
-                        # Stream le fichier sur le SSD
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get(attachment.url) as response:
-                                if response.status == 200:
-                                    async with aiofiles.open(file_path, 'wb') as f:
-                                        async for data in response.content.iter_chunked(8192):
-                                            await f.write(data)
-                        
-                        processed += 1
-                        if processed % 5 == 0:  # Update tous les 5 fichiers
-                            await status_message.edit(
-                                content=f"⏳ Processing {processed}/{total_files} files..."
-                            )
+                    # Si l'utilisateur a voté, utiliser Catbox
+                    logger.debug("User has voted, using Catbox")
+                    uploader = CatboxUploader()
+                    url = await uploader.upload(zip_path)
+                    await interaction.followup.send(
+                        f"📦 Fichier volumineux ({file_size / (1024*1024):.2f}MB).\n"
+                        f"Téléchargez-le ici : {url}"
+                    )
+                else:
+                    # Envoyer directement via Discord
+                    logger.debug("Sending file via Discord")
+                    await interaction.followup.send(
+                        f"📦 {len(downloaded_files)} fichiers trouvés",
+                        file=discord.File(zip_path)
+                    )
 
-                # Créer le ZIP en streaming
-                zip_path = os.path.join(temp_dir, f'media_files_{int(time.time())}.zip')
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for folder in ["Images", "Videos"]:
-                        folder_path = os.path.join(session_dir, folder)
-                        if os.path.exists(folder_path):
-                            for root, _, files in os.walk(folder_path):
-                                for file in files:
-                                    file_path = os.path.join(root, file)
-                                    arc_name = os.path.relpath(file_path, session_dir)
-                                    zipf.write(file_path, arc_name)
-
-                # Upload le ZIP
-                await status_message.edit(content="⏳ Uploading to file host...")
-                async with aiofiles.open(zip_path, 'rb') as f:
-                    file_data = await f.read()
-                    await interaction.followup.send(file=discord.File(
-                        fp=zip_path,
-                        filename="media_files.zip"
-                    ))
-
-            finally:
-                # Nettoyer les fichiers temporaires
-                if os.path.exists(session_dir):
-                    shutil.rmtree(session_dir)
-                if os.path.exists(zip_path):
-                    os.remove(zip_path)
+                successful_downloads.inc()
 
         except Exception as e:
-            print(f"Error in process_attachments: {e}")
-            await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+            failed_downloads.inc()
+            logger.error(f"Error in download_media: {e}")
+            await interaction.followup.send("❌ Une erreur est survenue lors du téléchargement.")
 
     @app_commands.command(name="checkvote", description="Check your vote status")
     async def check_vote_status(self, interaction: discord.Interaction):
