@@ -16,7 +16,7 @@ import shutil
 import typing
 from utils.logging import Logger
 import logging
-import topgg  # Import direct de topgg
+import dbl as topgg  # Import de dblpy avec alias topgg
 
 # Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
