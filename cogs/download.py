@@ -113,33 +113,62 @@ class Download(commands.Cog):
         app_commands.Choice(name="🎥 Videos", value="videos"),
         app_commands.Choice(name="📁 All", value="all")
     ])
-    @app_commands.choices(messages=[
-        app_commands.Choice(name="Last 100", value=100),
-        app_commands.Choice(name="Last 1000", value=1000),
-        app_commands.Choice(name="All messages", value=0),
-    ])
-    async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 100):
+    @app_commands.describe(
+        type="Type de médias à télécharger",
+        messages="Nombre de messages à analyser (0 = tous les messages)"
+    )
+    async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 0):
         try:
-            await interaction.response.defer()
+            await interaction.response.defer(thinking=True)  # Ajout de thinking=True pour les longues opérations
             logger.debug(f"Starting download with type: {type}, messages: {messages}")
 
             # Créer un dossier temporaire
             with tempfile.TemporaryDirectory() as temp_dir:
                 downloaded_files = []
                 
-                # Récupérer les messages
-                channel_messages = [msg async for msg in interaction.channel.history(limit=messages)]
+                # Si messages = 0, on ne met pas de limite (None)
+                message_limit = None if messages <= 0 else messages
+                logger.debug(f"Fetching messages from channel {interaction.channel.name} with limit: {message_limit}")
+                
+                # Message d'information pour l'utilisateur si on cherche tous les messages
+                if message_limit is None:
+                    await interaction.followup.send("🔍 Recherche dans tous les messages du canal... Cela peut prendre un moment.")
+                
+                try:
+                    channel_messages = []
+                    async for msg in interaction.channel.history(limit=message_limit):
+                        channel_messages.append(msg)
+                    logger.debug(f"Successfully fetched {len(channel_messages)} messages")
+                    
+                    # Message de progression
+                    await interaction.followup.send(f"📥 {len(channel_messages)} messages analysés, traitement des fichiers en cours...")
+                except Exception as e:
+                    logger.error(f"Error fetching messages: {e}")
+                    await interaction.followup.send("❌ Erreur lors de la récupération des messages.")
+                    return
                 
                 # Télécharger les fichiers
                 for message in channel_messages:
                     for attachment in message.attachments:
                         file_ext = os.path.splitext(attachment.filename)[1].lower()
                         if file_ext in self.media_types[type]:
-                            if file_path := await self.download_attachment(attachment.url, temp_dir):
-                                downloaded_files.append(file_path)
+                            logger.debug(f"Found matching file: {attachment.filename}")
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(attachment.url) as response:
+                                    if response.status == 200:
+                                        file_path = os.path.join(temp_dir, attachment.filename)
+                                        with open(file_path, 'wb') as f:
+                                            f.write(await response.read())
+                                        downloaded_files.append(file_path)
 
                 if not downloaded_files:
-                    await interaction.followup.send("❌ Aucun média trouvé dans les messages récents.")
+                    msg = "❌ Aucun média trouvé"
+                    if messages > 0:
+                        msg += f" dans les {messages} derniers messages"
+                    else:
+                        msg += " dans le canal"
+                    msg += f" de type {type}"
+                    await interaction.followup.send(msg)
                     return
 
                 # Créer le zip
