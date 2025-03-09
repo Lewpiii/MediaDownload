@@ -30,6 +30,9 @@ async def setup(bot):
     try:
         await bot.add_cog(Download(bot))
         logger.info("Download cog successfully added")
+        # Synchroniser les commandes
+        await bot.tree.sync()
+        logger.info("Commands synchronized")
     except Exception as e:
         logger.error(f"Error setting up Download cog: {e}")
         raise
