@@ -58,111 +58,8 @@ class Download(commands.Cog):
 
     @app_commands.command(
         name="download",
-        description="Télécharge une vidéo ou une image depuis un lien"
+        description="Download media from this channel"
     )
-    async def download_command(self, interaction: discord.Interaction, url: str):
-        logger.debug("Download command called")  # Log de l'appel de commande
-        try:
-            # Incrémenter le compteur de téléchargements
-            download_count.inc()
-            
-            # Message initial
-            await interaction.response.send_message("🔄 Traitement de votre demande...")
-            
-            # Vérification de l'URL
-            if not url.startswith(('http://', 'https://')):
-                failed_downloads.inc()
-                return await interaction.edit_original_response(
-                    content="❌ URL invalide. Veuillez fournir une URL valide."
-                )
-            
-            # Log dans le canal de logs si configuré
-            if self.logs_channel_id:
-                try:
-                    log_channel = self.bot.get_channel(self.logs_channel_id)
-                    if log_channel:
-                        embed = discord.Embed(
-                            title="📥 Nouvelle demande de téléchargement",
-                            description=f"URL: {url}",
-                            color=0x3498db,
-                            timestamp=datetime.utcnow()
-                        )
-                        embed.add_field(name="Utilisateur", value=f"{interaction.user.name} ({interaction.user.id})")
-                        embed.add_field(name="Serveur", value=f"{interaction.guild.name} ({interaction.guild.id})")
-                        await log_channel.send(embed=embed)
-                except Exception as e:
-                    self.logger.error(f"Error sending log message: {e}")
-            
-            # TODO: Ajouter la logique de téléchargement ici
-            successful_downloads.inc()
-            await interaction.edit_original_response(
-                content=f"✅ URL reçue : {url}\nEn cours de développement..."
-            )
-
-        except Exception as e:
-            failed_downloads.inc()
-            self.logger.error(f"Erreur lors du téléchargement: {e}")
-            await interaction.edit_original_response(
-                content="❌ Une erreur est survenue lors du téléchargement."
-            )
-
-    async def check_vote(self, user_id: int) -> bool:
-        """Vérifie si l'utilisateur a voté via l'API Top.gg"""
-        token = os.getenv('TOP_GG_TOKEN')
-        if not token:
-            print("⚠️ TOP_GG_TOKEN not found in environment variables")
-            return True  # En cas de problème avec le token, on laisse passer
-            
-        try:
-            print(f"\n=== Vote Check Debug ===")
-            print(f"Checking vote for user ID: {user_id}")
-            
-            async with aiohttp.ClientSession() as session:
-                headers = {"Authorization": token}
-                url = f"https://top.gg/api/bots/1332684877551763529/check?userId={user_id}"
-                
-                print(f"Making request to: {url}")
-                async with session.get(url, headers=headers) as response:
-                    print(f"Response status: {response.status}")
-                    response_text = await response.text()
-                    print(f"Raw response: {response_text}")
-                    
-                    if response.status == 200:
-                        try:
-                            data = await response.json()
-                            print(f"Parsed response data: {data}")
-                            has_voted = bool(data.get("voted", 0))
-                            print(f"Has voted: {has_voted}")
-                            return has_voted
-                        except Exception as e:
-                            print(f"Error parsing response: {e}")
-                            return True  # En cas d'erreur de parsing, on laisse passer
-                    else:
-                        print(f"Unexpected status code: {response.status}")
-                        return True  # En cas d'erreur d'API, on laisse passer
-                        
-        except Exception as e:
-            print(f"Error during vote check: {e}")
-            return True  # En cas d'erreur, on laisse passer
-
-    async def check_permissions(self, channel: discord.TextChannel) -> bool:
-        """Vérifie les permissions du bot dans le channel"""
-        permissions = channel.permissions_for(channel.guild.me)
-        required_permissions = {
-            "read_messages": True,
-            "send_messages": True,
-            "attach_files": True,
-            "read_message_history": True,
-        }
-        
-        missing_permissions = [
-            perm for perm, required in required_permissions.items()
-            if getattr(permissions, perm) != required
-        ]
-        
-        return not missing_permissions, missing_permissions
-
-    @app_commands.command(name="download", description="Download media from this channel")
     @app_commands.choices(type=[
         app_commands.Choice(name="🖼️ Images", value="images"),
         app_commands.Choice(name="🎥 Videos", value="videos"),
@@ -174,7 +71,7 @@ class Download(commands.Cog):
         app_commands.Choice(name="All messages", value=0),
     ])
     async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 100):
-        logger.info(f"Download command called with type={type}, messages={messages}")
+        logger.debug(f"Download media command called with type: {type}, messages: {messages}")
         try:
             await interaction.response.defer()
             
