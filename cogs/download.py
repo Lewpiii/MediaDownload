@@ -16,7 +16,7 @@ import shutil
 import typing
 from utils.logging import Logger
 import logging
-import dbl  # Import direct de dbl
+from topggpy import DBLClient  # Nouveau package correct
 
 # Configuration du logger avec plus de détails
 logger = logging.getLogger('bot.download')
@@ -43,17 +43,18 @@ class Download(commands.Cog):
             'videos': ['.mp4', '.webm', '.mov'],
             'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
         }
-        # Initialisation de top.gg
-        self.dbl_client = None
+        # Initialisation de top.gg avec le nouveau client
+        self.topgg_client = None
         token = os.getenv('TOPGG_TOKEN')
-        logger.debug(f"Initializing DBL client with token present: {bool(token)}")
+        logger.debug(f"Initializing Top.gg client with token present: {bool(token)}")
         
         if token:
             try:
-                self.dbl_client = dbl.DBLClient(bot, token)
-                logger.info("DBL client successfully initialized")
+                self.topgg_client = DBLClient(bot, token)
+                logger.info("Top.gg client successfully initialized")
             except Exception as e:
-                logger.error(f"Failed to initialize DBL client: {e}")
+                logger.error(f"Failed to initialize Top.gg client: {e}")
+                logger.error(f"Error details: {str(e)}")
         else:
             logger.error("TOPGG_TOKEN environment variable is missing or invalid")
 
@@ -96,16 +97,17 @@ class Download(commands.Cog):
 
     async def check_vote(self, user_id: int) -> bool:
         """Vérifie si l'utilisateur a voté"""
-        if self.dbl_client is None:
-            logger.error("DBL client not initialized")
+        if self.topgg_client is None:
+            logger.error("Top.gg client not initialized")
             return False
 
         try:
-            has_voted = await self.dbl_client.get_user_vote(user_id)
+            has_voted = await self.topgg_client.has_voted(user_id)  # Méthode correcte
             logger.debug(f"Vote check for user {user_id}: {has_voted}")
             return has_voted
         except Exception as e:
             logger.error(f"Error checking vote status: {e}")
+            logger.error(f"Error details: {str(e)}")
             return False
 
     async def upload_to_catbox(self, file_path: str) -> str:
