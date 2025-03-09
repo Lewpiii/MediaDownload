@@ -10,7 +10,7 @@ import aiohttp
 from utils.catbox import CatboxUploader
 
 # Configuration
-MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB limite Discord
+MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB Discord limit
 logger = logging.getLogger('bot.download')
 logger.setLevel(logging.DEBUG)
 
@@ -41,12 +41,12 @@ class Download(commands.Cog):
             with tempfile.TemporaryDirectory() as temp_dir:
                 downloaded_files = []
                 
-                # Si messages = 0, on ne met pas de limite (None)
+                # If messages = 0, no limit (None)
                 message_limit = None if messages <= 0 else messages
                 logger.debug(f"Fetching messages from channel {interaction.channel.name} with limit: {message_limit}")
                 
                 if message_limit is None:
-                    await interaction.followup.send("🔍 Recherche dans tous les messages du canal... Cela peut prendre un moment.")
+                    await interaction.followup.send("🔍 Searching through all channel messages... This might take a while.")
                 
                 try:
                     channel_messages = []
@@ -54,13 +54,13 @@ class Download(commands.Cog):
                         channel_messages.append(msg)
                     logger.debug(f"Successfully fetched {len(channel_messages)} messages")
                     
-                    await interaction.followup.send(f"📥 {len(channel_messages)} messages analysés, traitement des fichiers en cours...")
+                    await interaction.followup.send(f"📥 {len(channel_messages)} messages analyzed, processing files...")
                 except Exception as e:
                     logger.error(f"Error fetching messages: {e}")
-                    await interaction.followup.send("❌ Erreur lors de la récupération des messages.")
+                    await interaction.followup.send("❌ Error while retrieving messages.")
                     return
                 
-                # Télécharger les fichiers
+                # Download files
                 for message in channel_messages:
                     for attachment in message.attachments:
                         file_ext = os.path.splitext(attachment.filename)[1].lower()
@@ -74,16 +74,16 @@ class Download(commands.Cog):
                                         downloaded_files.append(file_path)
 
                 if not downloaded_files:
-                    msg = "❌ Aucun média trouvé"
+                    msg = "❌ No media found"
                     if messages > 0:
-                        msg += f" dans les {messages} derniers messages"
+                        msg += f" in the last {messages} messages"
                     else:
-                        msg += " dans le canal"
-                    msg += f" de type {type}"
+                        msg += " in the channel"
+                    msg += f" of type {type}"
                     await interaction.followup.send(msg)
                     return
 
-                # Créer le zip
+                # Create zip
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_name = f"media_{type}_{timestamp}.zip"
                 zip_path = os.path.join(temp_dir, zip_name)
@@ -92,12 +92,12 @@ class Download(commands.Cog):
                     for file in downloaded_files:
                         zip_file.write(file, os.path.basename(file))
 
-                # Vérifier la taille du zip
+                # Check zip size
                 file_size = os.path.getsize(zip_path)
                 logger.debug(f"Zip size: {file_size / (1024*1024):.2f}MB")
 
                 if file_size > MAX_DISCORD_SIZE:
-                    # Upload vers Catbox
+                    # Upload to Catbox
                     logger.debug("File too large, using Catbox")
                     try:
                         uploader = CatboxUploader()
@@ -105,25 +105,25 @@ class Download(commands.Cog):
                             file_data = f.read()
                         url = await uploader.upload_file(filename=zip_name, file_data=file_data)
                         await interaction.followup.send(
-                            f"📦 Fichier volumineux ({file_size / (1024*1024):.2f}MB).\n"
-                            f"Téléchargez-le ici : {url}"
+                            f"📦 Large file ({file_size / (1024*1024):.2f}MB).\n"
+                            f"Download it here: {url}"
                         )
                     except Exception as e:
                         logger.error(f"Failed to upload to Catbox: {e}")
                         await interaction.followup.send(
-                            "❌ Erreur lors de l'upload vers Catbox. Veuillez réessayer plus tard."
+                            "❌ Error uploading to Catbox. Please try again later."
                         )
                 else:
-                    # Envoyer directement via Discord
+                    # Send directly via Discord
                     logger.debug("Sending file via Discord")
                     await interaction.followup.send(
-                        f"📦 {len(downloaded_files)} fichiers trouvés",
+                        f"📦 {len(downloaded_files)} files found",
                         file=discord.File(zip_path)
                     )
 
         except Exception as e:
             logger.error(f"Error in download_media: {e}")
-            await interaction.followup.send("❌ Une erreur est survenue lors du téléchargement.")
+            await interaction.followup.send("❌ An error occurred during download.")
 
 async def setup(bot):
     await bot.add_cog(Download(bot)) 
