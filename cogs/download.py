@@ -29,16 +29,20 @@ MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB limite Discord
 TOPGG_TOKEN = os.getenv('TOP_GG_TOKEN')
 
 async def setup(bot):
-    logger.debug("Setting up Download cog")  # Log du setup
-    await bot.add_cog(Download(bot))
-    logger.debug("Download cog added successfully")  # Log de confirmation
+    logger.info("Setting up Download cog")  # Log de setup
+    try:
+        await bot.add_cog(Download(bot))
+        logger.info("Download cog successfully added")
+    except Exception as e:
+        logger.error(f"Error setting up Download cog: {e}")
+        raise
 
 class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logger
         self.topgg = topgg.DBLClient(bot, TOPGG_TOKEN)
-        logger.debug("Download cog initialized")  # Log d'initialisation
+        logger.info("Download cog initialized")  # Log d'initialisation
         
         # Initialisation sécurisée du channel ID
         try:
@@ -57,16 +61,19 @@ class Download(commands.Cog):
 
     async def cog_load(self):
         """Appelé quand le cog est chargé"""
-        logger.debug("Download cog is being loaded")  # Log du chargement
+        logger.info("Download cog is loading")  # Log de chargement
         try:
-            if channel_id := os.getenv('LOGS_CHANNEL_ID'):
-                self.logs_channel_id = int(channel_id)
-                self.logger.info(f"Log channel ID set to: {self.logs_channel_id}")
-            else:
-                self.logger.warning("LOGS_CHANNEL_ID not set")
-        except ValueError:
-            self.logger.warning("Invalid LOGS_CHANNEL_ID, logging disabled")
-            self.logs_channel_id = None
+            # Synchroniser les commandes du cog
+            logger.info("Attempting to sync commands for Download cog")
+            if not hasattr(self.bot, 'tree'):
+                logger.error("Bot doesn't have a command tree!")
+                return
+            
+            # Vérifier si la commande est dans l'arbre
+            commands = await self.bot.tree.fetch_commands()
+            logger.info(f"Current commands: {[cmd.name for cmd in commands]}")
+        except Exception as e:
+            logger.error(f"Error in cog_load: {e}")
 
     async def download_attachment(self, url: str, temp_dir: str) -> str:
         """Télécharge un fichier depuis une URL"""

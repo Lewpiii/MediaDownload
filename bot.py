@@ -104,18 +104,17 @@ class MediaDownloadBot(commands.Bot):
             for filename in os.listdir('./cogs'):
                 if filename.endswith('.py') and not filename.startswith('__'):
                     try:
-                        print(f"Attempting to load: {filename}")
+                        print(f"Loading: {filename}")
                         await self.load_extension(f'cogs.{filename[:-3]}')
-                        print(f"✓ Successfully loaded: {filename}")
+                        print(f"✓ Loaded: {filename}")
                     except Exception as e:
-                        print(f"✗ Failed to load {filename}: {str(e)}")
-            print("===================\n")
+                        print(f"✗ Failed to load {filename}: {e}")
             
             # Synchroniser les commandes
-            print("Synchronizing commands...")
+            print("\nSynchronizing commands...")
             await self.tree.sync()
             commands = await self.tree.fetch_commands()
-            print(f"\n=== Registered Commands ===")
+            print("\n=== Registered Commands ===")
             for cmd in commands:
                 print(f"✓ /{cmd.name} - {cmd.description}")
             print("=========================\n")
