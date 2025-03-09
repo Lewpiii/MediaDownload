@@ -102,6 +102,15 @@ class Download(commands.Cog):
             logger.error(f"Error checking vote: {e}")
             return True  # En cas d'erreur, on autorise
 
+    async def upload_to_catbox(self, file_path: str) -> str:
+        """Upload un fichier vers Catbox"""
+        try:
+            uploader = CatboxUploader()
+            return await uploader.upload_file(file_path)
+        except Exception as e:
+            logger.error(f"Error uploading to Catbox: {e}")
+            raise
+
     @app_commands.command(
         name="download",
         description="Download media from this channel"
@@ -198,12 +207,17 @@ class Download(commands.Cog):
 
                     # Si l'utilisateur a voté, utiliser Catbox
                     logger.debug("User has voted, using Catbox")
-                    uploader = CatboxUploader()
-                    url = await uploader.upload(zip_path)
-                    await interaction.followup.send(
-                        f"📦 Fichier volumineux ({file_size / (1024*1024):.2f}MB).\n"
-                        f"Téléchargez-le ici : {url}"
-                    )
+                    try:
+                        url = await self.upload_to_catbox(zip_path)
+                        await interaction.followup.send(
+                            f"📦 Fichier volumineux ({file_size / (1024*1024):.2f}MB).\n"
+                            f"Téléchargez-le ici : {url}"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to upload to Catbox: {e}")
+                        await interaction.followup.send(
+                            "❌ Erreur lors de l'upload vers Catbox. Veuillez réessayer plus tard."
+                        )
                 else:
                     # Envoyer directement via Discord
                     logger.debug("Sending file via Discord")
