@@ -26,13 +26,29 @@ logger.setLevel(logging.DEBUG)  # Augmente le niveau de détail
 MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB limite Discord
 
 async def setup(bot):
-    logger.info("Setting up Download cog")  # Log de setup
+    logger.info("Starting Download cog setup")
     try:
-        await bot.add_cog(Download(bot))
-        logger.info("Download cog successfully added")
-        # Synchroniser les commandes
-        await bot.tree.sync()
-        logger.info("Commands synchronized")
+        cog = Download(bot)
+        await bot.add_cog(cog)
+        logger.info("Download cog added successfully")
+        
+        # Force sync for this specific command
+        try:
+            cmd = bot.tree.get_command("download")
+            if not cmd:
+                logger.warning("Download command not found in tree")
+            else:
+                logger.info("Download command found in tree")
+            
+            # Sync commands
+            await bot.tree.sync()
+            logger.info("Commands synchronized")
+            
+            # Verify after sync
+            commands = await bot.tree.fetch_commands()
+            logger.info(f"Available commands after sync: {[cmd.name for cmd in commands]}")
+        except Exception as e:
+            logger.error(f"Error during command sync: {e}")
     except Exception as e:
         logger.error(f"Error setting up Download cog: {e}")
         raise
@@ -72,7 +88,7 @@ class Download(commands.Cog):
 
     async def cog_load(self):
         """Appelé quand le cog est chargé"""
-        logger.info("Download cog is loading")  # Log de chargement
+        logger.info("Loading Download cog")
         try:
             # Synchroniser les commandes du cog
             logger.info("Attempting to sync commands for Download cog")
@@ -84,7 +100,7 @@ class Download(commands.Cog):
             commands = await self.bot.tree.fetch_commands()
             logger.info(f"Current commands: {[cmd.name for cmd in commands]}")
         except Exception as e:
-            logger.error(f"Error in cog_load: {e}")
+            logger.error(f"Error fetching commands: {e}")
 
     async def download_attachment(self, url: str, temp_dir: str) -> str:
         """Télécharge un fichier depuis une URL"""
