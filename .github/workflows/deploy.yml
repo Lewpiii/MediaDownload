@@ -16,16 +16,50 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /home/botuser/discord-bot/MediaDownload
+            echo "=== DEPLOYMENT STARTED ==="
+            echo "Date: $(date)"
+            
+            # Stop any running bot processes
+            echo "Stopping existing bot processes..."
+            sudo pkill -f "python.*bot.py" || true
+            sudo systemctl stop discord-bot || true
+            
+            # Pull latest code
+            echo "Pulling latest code..."
             git pull
+            
+            # Activate virtual environment
+            echo "Activating virtual environment..."
             source ../venv/bin/activate
+            
+            # Install dependencies
+            echo "Installing dependencies..."
             pip install -r requirements.txt
             
             # Configure environment variables
+            echo "Configuring environment variables..."
             echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" > .env
             echo "TOP_GG_TOKEN=${{ secrets.TOP_GG_TOKEN }}" >> .env
             echo "LOGS_CHANNEL_ID=${{ secrets.LOGS_CHANNEL_ID }}" >> .env
             echo "WEBHOOK_URL=${{ secrets.WEBHOOK_URL }}" >> .env
             echo "GOFILE_TOKEN=${{ secrets.GOFILE_TOKEN }}" >> .env
             
-            # Restart the bot service
-            sudo /bin/systemctl restart discord-bot 
+            # Verify .env file
+            echo "Verifying .env file:"
+            ls -la .env
+            echo "DISCORD_TOKEN is set: $(grep -q DISCORD_TOKEN .env && echo 'YES' || echo 'NO')"
+            
+            # Set proper permissions
+            chmod 600 .env
+            chown botuser:botuser .env
+            
+            # Start the bot service
+            echo "Starting bot service..."
+            sudo systemctl start discord-bot
+            
+            # Wait a moment and check status
+            sleep 5
+            echo "Bot service status:"
+            sudo systemctl status discord-bot --no-pager
+            
+            echo "=== DEPLOYMENT COMPLETED ===" 
