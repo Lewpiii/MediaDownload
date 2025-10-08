@@ -171,21 +171,21 @@ class Download(commands.Cog):
             
             # Create progress embed that we'll update
             progress_embed = discord.Embed(
-                title="📥 Téléchargement en cours",
+                title="📥 Download in Progress",
                 color=0x3498db,
                 timestamp=datetime.utcnow()
             )
             progress_embed.add_field(
                 name="⚙️ Configuration",
-                value=f"**Type**: {media_type.title()}\n**Période**: {date_range}\n**Limite**: {'Tous les messages' if message_limit is None else f'{message_limit} messages'}",
+                value=f"**Type**: {media_type.title()}\n**Period**: {date_range}\n**Limit**: {'All messages' if message_limit is None else f'{message_limit} messages'}",
                 inline=False
             )
             progress_embed.add_field(
-                name="📊 Statut",
-                value="🔍 Recherche des messages...",
+                name="📊 Status",
+                value="🔍 Searching messages...",
                 inline=False
             )
-            progress_embed.set_footer(text="Le téléchargement est en cours...")
+            progress_embed.set_footer(text="Download is in progress...")
             
             # Update the existing message instead of creating a new one
             await interaction.response.edit_message(embed=progress_embed, view=None)
@@ -202,8 +202,8 @@ class Download(commands.Cog):
                 # Update progress
                 progress_embed.set_field_at(
                     1,
-                    name="📊 Statut",
-                    value=f"✅ Trouvé {total_messages} messages\n📥 Téléchargement des médias...",
+                    name="📊 Status",
+                    value=f"✅ Found {total_messages} messages\n📥 Downloading media...",
                     inline=False
                 )
                 await interaction.edit_original_response(embed=progress_embed)
@@ -221,8 +221,8 @@ class Download(commands.Cog):
                                 if should_pause:
                                     progress_embed.set_field_at(
                                         1,
-                                        name="📊 Statut",
-                                        value=f"⏸️ Pause: {reason}\nAttente de 30 secondes...",
+                                        name="📊 Status",
+                                        value=f"⏸️ Paused: {reason}\nWaiting 30 seconds...",
                                         inline=False
                                     )
                                     await interaction.edit_original_response(embed=progress_embed)
@@ -242,19 +242,19 @@ class Download(commands.Cog):
                                         
                                         progress_embed.set_field_at(
                                             1,
-                                            name="📊 Progression",
-                                            value=f"{progress_bar}\n**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {total_size/1024/1024:.1f}MB",
+                                            name="📊 Progress",
+                                            value=f"{progress_bar}\n**Files downloaded**: {len(downloaded_files)}\n**Total size**: {total_size/1024/1024:.1f}MB",
                                             inline=False
                                         )
                                         await interaction.edit_original_response(embed=progress_embed)
                 
                 if not downloaded_files:
-                    progress_embed.title = "❌ Aucun média trouvé"
+                    progress_embed.title = "❌ No Media Found"
                     progress_embed.color = 0xFF0000
                     progress_embed.set_field_at(
                         1,
-                        name="📊 Résultat",
-                        value=f"Aucun fichier {media_type} trouvé dans la période sélectionnée.",
+                        name="📊 Result",
+                        value=f"No {media_type} files found in the selected period.",
                         inline=False
                     )
                     await interaction.edit_original_response(embed=progress_embed)
@@ -263,8 +263,8 @@ class Download(commands.Cog):
                 # Smart organization of files
                 progress_embed.set_field_at(
                     1,
-                    name="📊 Statut",
-                    value=f"🧠 Organisation intelligente de {len(downloaded_files)} fichiers...",
+                    name="📊 Status",
+                    value=f"🧠 Smart organization of {len(downloaded_files)} files...",
                     inline=False
                 )
                 await interaction.edit_original_response(embed=progress_embed)
@@ -275,14 +275,14 @@ class Download(commands.Cog):
                 stats = smart_classifier.get_organization_stats(organized_files)
                 
                 # Update embed with organization info
-                org_text = f"📁 **{stats['total_files']} fichiers** organisés en **{stats['total_categories']} catégories**\n\n"
+                org_text = f"📁 **{stats['total_files']} files** organized into **{stats['total_categories']} categories**\n\n"
                 for category, subcategories in stats['categories'].items():
                     for subcategory, count in subcategories.items():
-                        org_text += f"• {category}/{subcategory}: {count} fichiers\n"
+                        org_text += f"• {category}/{subcategory}: {count} files\n"
                 
                 progress_embed.set_field_at(
                     1,
-                    name="📊 Organisation",
+                    name="📊 Organization",
                     value=org_text[:1024],  # Discord field limit
                     inline=False
                 )
@@ -291,8 +291,8 @@ class Download(commands.Cog):
                 # Create organized zip with progress updates
                 progress_embed.set_field_at(
                     1,
-                    name="📊 Statut",
-                    value="📦 Création du fichier ZIP...",
+                    name="📊 Status",
+                    value="📦 Creating ZIP file...",
                     inline=False
                 )
                 await interaction.edit_original_response(embed=progress_embed)
@@ -318,8 +318,8 @@ class Download(commands.Cog):
                                 zip_bar = self._create_progress_bar(zip_progress)
                                 progress_embed.set_field_at(
                                     1,
-                                    name="📊 Création du ZIP",
-                                    value=f"{zip_bar}\n**Fichiers compressés**: {file_count}/{total_files}",
+                                    name="📊 ZIP Creation",
+                                    value=f"{zip_bar}\n**Files compressed**: {file_count}/{total_files}",
                                     inline=False
                                 )
                                 await interaction.edit_original_response(embed=progress_embed)
@@ -337,8 +337,8 @@ class Download(commands.Cog):
                     logger.debug("File too large, using Catbox")
                     progress_embed.set_field_at(
                         1,
-                        name="📊 Statut",
-                        value="☁️ Upload vers Catbox (fichier trop gros pour Discord)...",
+                        name="📊 Status",
+                        value="☁️ Uploading to Catbox (file too large for Discord)...",
                         inline=False
                     )
                     await interaction.edit_original_response(embed=progress_embed)
@@ -350,39 +350,39 @@ class Download(commands.Cog):
                         url = await uploader.upload_file(filename=zip_name, file_data=file_data)
                         
                         # Final success embed
-                        progress_embed.title = "✅ Téléchargement terminé !"
+                        progress_embed.title = "✅ Download Complete!"
                         progress_embed.color = 0x00FF00
                         progress_embed.set_field_at(
                             1,
-                            name="📊 Résultats",
-                            value=f"**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {file_size / (1024*1024):.2f}MB\n**Organisation**: Dossiers catégorisés intelligemment\n\n[📥 Cliquez ici pour télécharger]({url})",
+                            name="📊 Results",
+                            value=f"**Files downloaded**: {len(downloaded_files)}\n**Total size**: {file_size / (1024*1024):.2f}MB\n**Organization**: Smart categorized folders\n\n[📥 Click here to download]({url})",
                             inline=False
                         )
-                        progress_embed.set_footer(text="Téléchargement réussi !")
+                        progress_embed.set_footer(text="Download successful!")
                         await interaction.edit_original_response(embed=progress_embed)
                     except Exception as e:
                         logger.error(f"Failed to upload to Catbox: {e}")
-                        progress_embed.title = "❌ Erreur d'upload"
+                        progress_embed.title = "❌ Upload Error"
                         progress_embed.color = 0xFF0000
                         progress_embed.set_field_at(
                             1,
-                            name="📊 Erreur",
-                            value="Impossible d'uploader le fichier. Veuillez réessayer plus tard.",
+                            name="📊 Error",
+                            value="Unable to upload the file. Please try again later.",
                             inline=False
                         )
                         await interaction.edit_original_response(embed=progress_embed)
                 else:
                     # Send directly via Discord
                     logger.debug("Sending file via Discord")
-                    progress_embed.title = "✅ Téléchargement terminé !"
+                    progress_embed.title = "✅ Download Complete!"
                     progress_embed.color = 0x00FF00
                     progress_embed.set_field_at(
                         1,
-                        name="📊 Résultats",
-                        value=f"**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {file_size / (1024*1024):.2f}MB\n**Organisation**: Dossiers catégorisés intelligemment\n\n⬇️ Fichier ZIP ci-dessous",
+                        name="📊 Results",
+                        value=f"**Files downloaded**: {len(downloaded_files)}\n**Total size**: {file_size / (1024*1024):.2f}MB\n**Organization**: Smart categorized folders\n\n⬇️ ZIP file below",
                         inline=False
                     )
-                    progress_embed.set_footer(text="Téléchargement réussi !")
+                    progress_embed.set_footer(text="Download successful!")
                     await interaction.edit_original_response(embed=progress_embed, attachments=[discord.File(zip_path)])
 
             finally:
@@ -400,14 +400,14 @@ class Download(commands.Cog):
         except Exception as e:
             logger.error(f"Error in start_interactive_download: {e}")
             error_embed = discord.Embed(
-                title="❌ Erreur de téléchargement",
-                description="Une erreur s'est produite pendant le téléchargement. Veuillez réessayer.",
+                title="❌ Download Error",
+                description="An error occurred during download. Please try again.",
                 color=0xFF0000
             )
             try:
                 await interaction.edit_original_response(embed=error_embed, view=None)
             except:
-                # Si l'édition échoue, essayer de répondre
+                # If editing fails, try to respond
                 await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
     def _create_progress_bar(self, percent: float, length: int = 20) -> str:

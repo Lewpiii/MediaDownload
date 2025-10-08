@@ -109,7 +109,7 @@ class VoteView(discord.ui.View):
             self.auto_check_task.cancel()
 
 class TopGGChecker:
-    """Gestionnaire de vérification des votes top.gg"""
+    """Top.gg vote verification manager"""
     
     def __init__(self, bot):
         self.bot = bot
@@ -120,20 +120,20 @@ class TopGGChecker:
         
     async def has_voted(self, user_id: int) -> bool:
         """
-        Vérifie si un utilisateur a voté sur top.gg dans les dernières 12h
+        Check if a user has voted on top.gg in the last 12 hours
         
         Args:
-            user_id: L'ID Discord de l'utilisateur
+            user_id: The Discord user ID
             
         Returns:
-            True si l'utilisateur a voté, False sinon
+            True if the user has voted, False otherwise
         """
         print(f"[DEBUG] Checking vote for user {user_id}")
         
         if not self.token:
             print("[DEBUG] TOP_GG_TOKEN not configured, allowing access")
             logger.warning("TOP_GG_TOKEN not configured, skipping vote check")
-            return True  # Si pas de token, on autorise tout le monde
+            return True  # If no token, allow everyone
             
         try:
             headers = {
@@ -149,19 +149,19 @@ class TopGGChecker:
                     if response.status == 200:
                         data = await response.json()
                         print(f"[DEBUG] API response data: {data}")
-                        # L'API retourne {"voted": 1} si l'utilisateur a voté dans les 12h
+                        # API returns {"voted": 1} if user voted in the last 12h
                         voted = data.get('voted', 0) == 1
                         print(f"[DEBUG] User voted status: {voted}")
                         return voted
                     else:
                         print(f"[DEBUG] API error: {response.status}")
                         logger.error(f"Top.gg API error: {response.status}")
-                        return True  # En cas d'erreur API, on autorise
+                        return True  # In case of API error, allow access
                         
         except Exception as e:
             print(f"[DEBUG] Exception in vote check: {e}")
             logger.error(f"Error checking vote status: {e}")
-            return True  # En cas d'erreur, on autorise
+            return True  # In case of error, allow access
     
     async def create_vote_embed(self) -> discord.Embed:
         """Creates an embed asking the user to vote"""
@@ -228,7 +228,7 @@ class TopGGChecker:
 
 def require_vote():
     """
-    Décorateur pour vérifier si l'utilisateur a voté avant d'exécuter une commande
+    Decorator to check if user has voted before executing a command
     
     Usage:
         @app_commands.command()
@@ -239,21 +239,21 @@ def require_vote():
     def decorator(func):
         @wraps(func)
         async def wrapper(self, interaction: discord.Interaction, *args, **kwargs):
-            # Vérifier si le bot a un checker top.gg
+            # Check if the bot has a top.gg checker
             checker = getattr(self.bot, 'topgg_checker', None)
             
             if not checker:
-                # Si pas de checker configuré, autoriser la commande
+                # If no checker configured, allow the command
                 return await func(self, interaction, *args, **kwargs)
             
-            # Vérifier si l'utilisateur a voté
+            # Check if the user has voted
             has_voted = await checker.has_voted(interaction.user.id)
             
             if has_voted:
-                # L'utilisateur a voté, exécuter la commande normalement
+                # User has voted, execute the command normally
                 return await func(self, interaction, *args, **kwargs)
             else:
-                # L'utilisateur n'a pas voté, afficher le message de vote
+                # User hasn't voted, show vote message
                 embed = await checker.create_vote_embed()
                 view = checker.get_vote_button()
                 await interaction.response.send_message(
