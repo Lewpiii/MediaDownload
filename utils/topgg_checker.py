@@ -26,10 +26,13 @@ class VoteView(discord.ui.View):
         """Check if user has voted and proceed with download if yes"""
         print(f"[DEBUG] Vote status check clicked by {interaction.user.name}")
         
+        # Defer the interaction first
+        await interaction.response.defer()
+        
         # Update button to show checking
         button.label = "⏳ Checking..."
         button.disabled = True
-        await interaction.response.edit_message(view=self)
+        await interaction.edit_original_response(view=self)
         
         # Check vote status
         has_voted = await self.checker.has_voted(interaction.user.id)
@@ -215,13 +218,8 @@ class TopGGChecker:
         )
         view.add_item(vote_button)
         
-        # Check vote status button
-        check_button = discord.ui.Button(
-            label="🔄 Check Vote Status",
-            style=discord.ButtonStyle.secondary,
-            emoji="🔄"
-        )
-        view.add_item(check_button)
+        # The check button is already defined in VoteView class with @discord.ui.button decorator
+        # No need to add it again here
         
         return view
 
