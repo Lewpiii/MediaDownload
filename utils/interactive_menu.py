@@ -416,7 +416,7 @@ class ConfirmationView(discord.ui.View):
             
             # FORCE TEST: Always show vote requirement for testing
             # Remove this line when testing is complete
-            # has_voted = False
+            has_voted = False
             
             if not has_voted:
                 print(f"[DEBUG] User hasn't voted, showing vote requirement")
