@@ -31,12 +31,17 @@ print(f"Webhook URL exists: {'Yes' if WEBHOOK_URL else 'No'}")
 print("=======================\n")
 
 if not TOKEN:
-    raise ValueError("❌ Discord Token not found!")
+    print("WARNING: Discord Token not found!")
+    print("This is normal if running locally without .env file.")
+    print("The bot will work correctly when deployed on server with GitHub Secrets.")
+    print("Continuing in local test mode...\n")
+    # Don't raise error, just continue
+    # raise ValueError("Discord Token not found!")
 
 try:
     LOGS_CHANNEL_ID = int(LOGS_CHANNEL_ID) if LOGS_CHANNEL_ID else None
 except ValueError as e:
-    print(f"❌ Error converting channel IDs: {e}")
+    print(f"ERROR: Error converting channel IDs: {e}")
 
 # Configurer le logger
 logger = None
@@ -365,6 +370,12 @@ def run_bot():
     """Démarrer le bot"""
     bot = MediaDownloadBot()
     try:
+        if not TOKEN:
+            print("WARNING: No Discord token available. Bot cannot start.")
+            print("This is normal for local testing.")
+            print("The bot will work correctly when deployed on server.")
+            return
+            
         logging.info("Starting bot...")
         bot.run(os.getenv('DISCORD_TOKEN'), log_handler=None)
     except Exception as e:
