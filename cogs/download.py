@@ -147,9 +147,6 @@ class Download(commands.Cog):
     async def start_interactive_download(self, interaction: discord.Interaction, options: dict):
         """Start download process with interactive options"""
         try:
-            # Respond to the interaction immediately to avoid timeout
-            await interaction.response.defer()
-            
             # Extract options
             media_type = options.get('media_type', 'all')
             message_limit = options.get('message_limit', 0)
@@ -189,7 +186,8 @@ class Download(commands.Cog):
             )
             progress_embed.set_footer(text="Le téléchargement est en cours...")
             
-            await interaction.followup.send(embed=progress_embed)
+            # Update the existing message instead of creating a new one
+            await interaction.response.edit_message(embed=progress_embed, view=None)
             
             try:
                 # Fetch messages
@@ -380,14 +378,11 @@ class Download(commands.Cog):
                     progress_embed.set_field_at(
                         1,
                         name="📊 Résultats",
-                        value=f"**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {file_size / (1024*1024):.2f}MB\n**Organisation**: Dossiers catégorisés intelligemment",
+                        value=f"**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {file_size / (1024*1024):.2f}MB\n**Organisation**: Dossiers catégorisés intelligemment\n\n⬇️ Fichier ZIP ci-dessous",
                         inline=False
                     )
                     progress_embed.set_footer(text="Téléchargement réussi !")
-                    await interaction.edit_original_response(embed=progress_embed)
-                    
-                    # Send file in a separate message
-                    await interaction.followup.send(file=discord.File(zip_path))
+                    await interaction.edit_original_response(embed=progress_embed, attachments=[discord.File(zip_path)])
 
             finally:
                 # Cleanup
@@ -404,11 +399,15 @@ class Download(commands.Cog):
         except Exception as e:
             logger.error(f"Error in start_interactive_download: {e}")
             error_embed = discord.Embed(
-                title="❌ Download Error",
-                description="An error occurred during download. Please try again.",
+                title="❌ Erreur de téléchargement",
+                description="Une erreur s'est produite pendant le téléchargement. Veuillez réessayer.",
                 color=0xFF0000
             )
-            await interaction.followup.send(embed=error_embed)
+            try:
+                await interaction.edit_original_response(embed=error_embed, view=None)
+            except:
+                # Si l'édition échoue, essayer de répondre
+                await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
     def _create_progress_bar(self, percent: float, length: int = 20) -> str:
         """Create a visual progress bar"""
