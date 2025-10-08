@@ -6,51 +6,85 @@ class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Show bot help")
+    @app_commands.command(name="help", description="Show bot help and available commands")
     async def help(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="📚 Media Download Help",
-            description="Here are all available commands:",
+            title="📚 Media Download Bot Help",
+            description="Welcome to the Media Download Bot! Here are all available commands:",
             color=0x3498db
         )
         
         embed.add_field(
             name="/download",
             value=(
-                "Download media files with smart organization\n"
-                "• Choose type: Images, Videos, or All\n"
-                "• Choose number of messages to scan\n"
-                "• 🧠 Automatic categorization by content\n"
-                "• 📁 Organized folders (min 3 files per category)\n"
-                "• Free: Up to 25MB direct download\n"
-                "• Vote required: Unlimited size with Gofile.io"
+                "🎯 **Interactive Download Menu**\n"
+                "• Open a user-friendly interface with buttons\n"
+                "• Choose date ranges (Last hour, Today, This week, etc.)\n"
+                "• Select media types (Images, Videos, All)\n"
+                "• 🧠 Automatic smart organization\n"
+                "• 📁 Folders created for categories with 3+ files\n"
+                "• ⚡ SSD-optimized downloads (no RAM usage)\n"
+                "• 📊 Real-time progress updates"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="/test-classification",
+            value=(
+                "🧠 **Test Smart Organization**\n"
+                "• Test the intelligent file categorization system\n"
+                "• See how files would be organized\n"
+                "• View category statistics and folder structure"
             ),
             inline=False
         )
         
         embed.add_field(
             name="/bug",
-            value="Report a bug to the developers",
+            value=(
+                "🐛 **Report Issues**\n"
+                "• Report bugs or problems to developers\n"
+                "• Help improve the bot with your feedback"
+            ),
             inline=False
         )
         
         embed.add_field(
             name="/suggest",
-            value="Submit a suggestion for the bot",
+            value=(
+                "💡 **Submit Suggestions**\n"
+                "• Suggest new features or improvements\n"
+                "• Share ideas for better functionality"
+            ),
             inline=False
         )
         
         embed.add_field(
             name="/stats",
-            value="Show bot statistics",
+            value=(
+                "📊 **Bot Statistics**\n"
+                "• View bot performance metrics\n"
+                "• See server count and user statistics\n"
+                "• Check bot latency and uptime"
+            ),
             inline=False
         )
         
         embed.add_field(
-            name="/test-classification",
-            value="Test the smart file organization system",
+            name="🚀 Key Features",
+            value=(
+                "• **Smart Organization**: Files automatically sorted by category\n"
+                "• **Interactive Interface**: Easy-to-use button menus\n"
+                "• **Resource Monitoring**: Automatic pausing if system overloaded\n"
+                "• **SSD Optimization**: Direct disk writes, no RAM usage\n"
+                "• **Large File Support**: External hosting for files >25MB\n"
+                "• **Progress Tracking**: Real-time download progress"
+            ),
             inline=False
         )
+        
+        embed.set_footer(text="Click /download to start downloading media files!")
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

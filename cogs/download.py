@@ -10,6 +10,7 @@ import aiohttp
 import asyncio
 from utils.catbox import CatboxUploader
 from utils.smart_classifier import smart_classifier
+from utils.interactive_menu import InteractiveDownloadMenu
 import psutil
 import os.path
 import time
@@ -108,45 +109,57 @@ class ResourceMonitor:
         logger.info(f"Disk: {disk['free']:.1f}GB free of {disk['total']:.1f}GB ({disk['percent']}% used)")
 
 class Download(commands.Cog):
-    """Downloads media files from the channel.
-    Use /download to get images, videos, or both from messages.
-    Set messages to 0 to search through all channel messages."""
+    """Downloads media files from the channel with smart organization.
+    Use /download to open an interactive menu for easy file downloading.
+    Files are automatically organized by category with intelligent folder structure."""
 
     def __init__(self, bot):
         self.bot = bot
         self.logger = logger
         self.media_types = {
-            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
-            'videos': ['.mp4', '.webm', '.mov'],
-            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
+            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff'],
+            'videos': ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv'],
+            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv']
         }
+        self.interactive_menu = InteractiveDownloadMenu(bot)
 
     @app_commands.command(
         name="download",
-        description="Download media from messages with smart organization (use 0 to search all channel messages)"
+        description="Open interactive download menu with smart file organization"
     )
-    @app_commands.choices(type=[
-        app_commands.Choice(name="🖼️ Images", value="images"),
-        app_commands.Choice(name="🎥 Videos", value="videos"),
-        app_commands.Choice(name="📁 All", value="all")
-    ])
-    @app_commands.describe(
-        type="Type of media to download",
-        messages="Number of messages to search (use 0 to search ALL messages in the channel)"
-    )
-    async def download_media(self, interaction: discord.Interaction, type: str, messages: int = 0):
+    async def download_media(self, interaction: discord.Interaction):
         """
-        Download media files from messages.
-
-        Parameters
-        ----------
-        type: The type of media to download (images, videos, or all)
-        messages: Number of recent messages to search (use 0 to search ALL messages in the channel)
+        Open interactive download menu for media files.
+        
+        Features:
+        - Interactive button-based interface
+        - Date range selection
+        - Media type filtering
+        - Smart automatic organization
+        - Resource monitoring
         """
         try:
-            await interaction.response.defer(thinking=True)
-            logger.debug(f"Starting download with type: {type}, messages: {messages}")
+            await self.interactive_menu.create_main_menu(interaction)
+        except Exception as e:
+            logger.error(f"Error in download_media: {e}")
+            await interaction.response.send_message("❌ An error occurred while opening the download menu.", ephemeral=True)
 
+    async def start_interactive_download(self, interaction: discord.Interaction, options: dict):
+        """Start download process with interactive options"""
+        try:
+            await interaction.edit_original_response(
+                content="🚀 Starting download process...",
+                embed=None,
+                view=None
+            )
+            
+            # Extract options
+            media_type = options.get('media_type', 'all')
+            message_limit = options.get('message_limit', 0)
+            date_range = options.get('date_range', 'All time')
+            
+            logger.debug(f"Starting interactive download: {media_type}, limit: {message_limit}, range: {date_range}")
+            
             # Initialize resource monitoring
             monitor = ResourceMonitor()
             temp_dir = DOWNLOAD_CONFIG['temp_dir']
@@ -158,13 +171,23 @@ class Download(commands.Cog):
             downloaded_files = []
             total_size = 0
             
-            message_limit = None if messages <= 0 else messages
-            logger.debug(f"Fetching messages from channel {interaction.channel.name} with limit: {message_limit}")
+            # Set message limit
+            message_limit = None if message_limit <= 0 else message_limit
+            
+            # Send initial status
+            status_embed = discord.Embed(
+                title="📥 Download Started",
+                description=f"**Media Type**: {media_type.title()}\n**Date Range**: {date_range}\n**Message Limit**: {'All messages' if message_limit is None else f'{message_limit} messages'}",
+                color=0x00FF00,
+                timestamp=datetime.utcnow()
+            )
+            await interaction.followup.send(embed=status_embed)
             
             if message_limit is None:
                 await interaction.followup.send("🔍 Searching through all channel messages... This might take a while.")
             
             try:
+                # Fetch messages
                 channel_messages = []
                 async for msg in interaction.channel.history(limit=message_limit):
                     channel_messages.append(msg)
@@ -178,7 +201,7 @@ class Download(commands.Cog):
                     if msg.attachments:
                         for attachment in msg.attachments:
                             file_ext = os.path.splitext(attachment.filename)[1].lower()
-                            if file_ext in self.media_types[type]:
+                            if file_ext in self.media_types[media_type]:
                                 file_path = os.path.join(temp_dir, f"{len(downloaded_files)}_{attachment.filename}")
                                 
                                 # Check if we should pause due to resource usage
@@ -197,27 +220,20 @@ class Download(commands.Cog):
                                     # Update progress every 5 files
                                     if len(downloaded_files) % 5 == 0:
                                         eta = monitor.estimate_remaining_time()
-                                        await interaction.followup.send(
-                                            f"📊 Progress: {len(downloaded_files)} files downloaded\n"
-                                            f"📁 Total size: {total_size/1024/1024:.1f}MB\n"
-                                            f"⏱️ Estimated time remaining: {eta}"
+                                        progress_embed = discord.Embed(
+                                            title="📊 Download Progress",
+                                            description=f"**Files Downloaded**: {len(downloaded_files)}\n**Total Size**: {total_size/1024/1024:.1f}MB\n**ETA**: {eta}",
+                                            color=0x3498db
                                         )
+                                        await interaction.followup.send(embed=progress_embed)
                 
                 if not downloaded_files:
-                    msg = "❌ No media found"
-                    if messages > 0:
-                        msg += f" in the last {messages} messages"
-                    else:
-                        msg += " in the channel"
-                    msg += f" of type {type}"
-                    await interaction.followup.send(msg)
-                    
-                    # Cleanup
-                    for file in downloaded_files:
-                        try:
-                            os.remove(file)
-                        except:
-                            pass
+                    no_files_embed = discord.Embed(
+                        title="❌ No Media Found",
+                        description=f"No {media_type} files found in the selected range.",
+                        color=0xFF0000
+                    )
+                    await interaction.followup.send(embed=no_files_embed)
                     return
 
                 # Smart organization of files
@@ -226,17 +242,28 @@ class Download(commands.Cog):
                 
                 # Show organization stats
                 stats = smart_classifier.get_organization_stats(organized_files)
-                organization_info = f"📁 Organized into {stats['total_categories']} categories:\n"
-                for category, subcategories in stats['categories'].items():
-                    for subcategory, count in subcategories.items():
-                        organization_info += f"• {category}/{subcategory}: {count} files\n"
+                organization_embed = discord.Embed(
+                    title="📁 File Organization",
+                    description=f"Organized {stats['total_files']} files into {stats['total_categories']} categories:",
+                    color=0x9B59B6
+                )
                 
-                await interaction.followup.send(organization_info)
+                for category, subcategories in stats['categories'].items():
+                    category_text = ""
+                    for subcategory, count in subcategories.items():
+                        category_text += f"• **{subcategory}**: {count} files\n"
+                    organization_embed.add_field(
+                        name=f"📂 {category}",
+                        value=category_text,
+                        inline=True
+                    )
+                
+                await interaction.followup.send(embed=organization_embed)
                 
                 # Create organized zip with progress updates
                 await interaction.followup.send("📦 Creating organized zip file...")
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                zip_name = f"media_{type}_{timestamp}_organized.zip"
+                zip_name = f"media_{media_type}_{timestamp}_organized.zip"
                 zip_path = os.path.join(temp_dir, zip_name)
                 
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=DOWNLOAD_CONFIG['compress_level']) as zip_file:
@@ -260,7 +287,7 @@ class Download(commands.Cog):
                 log_path = os.path.join(temp_dir, f"classification_log_{timestamp}.json")
                 smart_classifier.save_classification_log(organized_files, log_path)
 
-                # Check zip size
+                # Check zip size and send result
                 file_size = os.path.getsize(zip_path)
                 logger.debug(f"Zip size: {file_size / (1024*1024):.2f}MB")
 
@@ -272,22 +299,35 @@ class Download(commands.Cog):
                         with open(zip_path, 'rb') as f:
                             file_data = f.read()
                         url = await uploader.upload_file(filename=zip_name, file_data=file_data)
-                        await interaction.followup.send(
-                            f"📦 Large file ({file_size / (1024*1024):.2f}MB).\n"
-                            f"Download it here: {url}"
+                        
+                        success_embed = discord.Embed(
+                            title="✅ Download Complete!",
+                            description=f"**Files Downloaded**: {len(downloaded_files)}\n**Total Size**: {file_size / (1024*1024):.2f}MB\n**Organization**: Smart categorized folders",
+                            color=0x00FF00
                         )
+                        success_embed.add_field(
+                            name="📥 Download Link",
+                            value=f"[Click here to download]({url})",
+                            inline=False
+                        )
+                        await interaction.followup.send(embed=success_embed)
                     except Exception as e:
                         logger.error(f"Failed to upload to Catbox: {e}")
-                        await interaction.followup.send(
-                            "❌ Error uploading to Catbox. Please try again later."
+                        error_embed = discord.Embed(
+                            title="❌ Upload Error",
+                            description="Failed to upload large file. Please try again later.",
+                            color=0xFF0000
                         )
+                        await interaction.followup.send(embed=error_embed)
                 else:
                     # Send directly via Discord
                     logger.debug("Sending file via Discord")
-                    await interaction.followup.send(
-                        f"📦 {len(downloaded_files)} files found",
-                        file=discord.File(zip_path)
+                    success_embed = discord.Embed(
+                        title="✅ Download Complete!",
+                        description=f"**Files Downloaded**: {len(downloaded_files)}\n**Total Size**: {file_size / (1024*1024):.2f}MB\n**Organization**: Smart categorized folders",
+                        color=0x00FF00
                     )
+                    await interaction.followup.send(embed=success_embed, file=discord.File(zip_path))
 
             finally:
                 # Cleanup
@@ -302,8 +342,13 @@ class Download(commands.Cog):
                     pass
 
         except Exception as e:
-            logger.error(f"Error in download_media: {e}")
-            await interaction.followup.send("❌ An error occurred during download.")
+            logger.error(f"Error in start_interactive_download: {e}")
+            error_embed = discord.Embed(
+                title="❌ Download Error",
+                description="An error occurred during download. Please try again.",
+                color=0xFF0000
+            )
+            await interaction.followup.send(embed=error_embed)
 
     async def download_file_in_chunks(self, url: str, file_path: str, chunk_size: int = None):
         """Download a file in chunks and save directly to disk (SSD) - NO RAM usage"""

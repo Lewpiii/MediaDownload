@@ -55,11 +55,11 @@ logging.info(f"Token trouvé : {'✓' if os.getenv('DISCORD_TOKEN') else '✗'}"
 
 class MediaDownloadBot(commands.Bot):
     def __init__(self):
-        print("\n=== Debug Discord Bot ===")
+        print("\n=== Discord Bot Initialization ===")
         print(f"Token exists: {'Yes' if os.getenv('DISCORD_TOKEN') else 'No'}")
         print(f"Logs Channel ID: {os.getenv('LOGS_CHANNEL_ID')}")
         print(f"Webhook URL exists: {'Yes' if os.getenv('WEBHOOK_URL') else 'No'}")
-        print("=======================\n")
+        print("===================================\n")
         
         intents = discord.Intents.default()
         intents.message_content = True
@@ -71,19 +71,20 @@ class MediaDownloadBot(commands.Bot):
             help_command=None
         )
         
-        # Initialiser les variables
+        # Initialize variables
         self.media_types = {
-            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
-            'videos': ['.mp4', '.webm', '.mov'],
-            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov']
+            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff'],
+            'videos': ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv'],
+            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv']
         }
         self.last_status = True
         self.log_channel = None
         self.status_task = None
         self.status_index = 0
         self.log_webhook_url = os.getenv('WEBHOOK_URL')
+        self.start_time = datetime.utcnow()
 
-        # Gérer LOGS_CHANNEL_ID de manière sécurisée
+        # Handle LOGS_CHANNEL_ID securely
         try:
             logs_channel_id = os.getenv('LOGS_CHANNEL_ID')
             self.logs_channel_id = int(logs_channel_id) if logs_channel_id else None
@@ -92,7 +93,7 @@ class MediaDownloadBot(commands.Bot):
             self.logs_channel_id = None
 
     async def setup_hook(self):
-        """Configuration initiale du bot"""
+        """Initial bot configuration"""
         try:
             logging.info("Starting setup hook...")
             
@@ -100,7 +101,7 @@ class MediaDownloadBot(commands.Bot):
             await performance_optimizer.optimize_system()
             logging.info("Performance optimizations applied")
             
-            # Charger les cogs
+            # Load cogs
             if not os.path.exists('./cogs'):
                 os.makedirs('./cogs')
                 logging.info("Created cogs directory")
@@ -115,7 +116,7 @@ class MediaDownloadBot(commands.Bot):
                     except Exception as e:
                         print(f"✗ Failed to load {filename}: {e}")
             
-            # Synchroniser les commandes
+            # Synchronize commands
             print("\nSynchronizing commands...")
             await self.tree.sync()
             commands = await self.tree.fetch_commands()
@@ -124,7 +125,7 @@ class MediaDownloadBot(commands.Bot):
                 print(f"✓ /{cmd.name} - {cmd.description}")
             print("=========================\n")
             
-            # Démarrer la rotation du statut après le chargement des cogs
+            # Start status rotation after loading cogs
             try:
                 self.rotate_status.start()
                 logging.info("✓ Started status rotation")
@@ -134,15 +135,15 @@ class MediaDownloadBot(commands.Bot):
             logging.info("Setup hook completed")
         except Exception as e:
             logging.error(f"Error in setup_hook: {e}")
-            raise  # Relève l'erreur pour voir la stack trace complète
+            raise  # Re-raise error to see full stack trace
 
     @tasks.loop(minutes=5)
     async def rotate_status(self):
-        """Change le statut du bot toutes les 5 minutes"""
+        """Change bot status every 5 minutes"""
         try:
             if self.status_index == 0:
                 activity = discord.Activity(
-                    type=discord.ActivityType.watching,  # En minuscules
+                    type=discord.ActivityType.watching,
                     name=f"/help | {len(self.guilds)} servers"
                 )
                 await self.change_presence(
@@ -152,7 +153,7 @@ class MediaDownloadBot(commands.Bot):
             else:
                 total_users = sum(g.member_count for g in self.guilds)
                 activity = discord.Activity(
-                    type=discord.ActivityType.watching,  # En minuscules
+                    type=discord.ActivityType.watching,
                     name=f"/help | {total_users} users"
                 )
                 await self.change_presence(
@@ -167,11 +168,11 @@ class MediaDownloadBot(commands.Bot):
 
     @rotate_status.before_loop
     async def before_rotate_status(self):
-        """Attendre que le bot soit prêt avant de démarrer la rotation"""
+        """Wait for bot to be ready before starting rotation"""
         await self.wait_until_ready()
 
     async def on_ready(self):
-        """Événement appelé quand le bot est prêt"""
+        """Event called when bot is ready"""
         try:
             print("\n=== Bot Ready ===")
             print(f"Logged in as: {self.user.name}")
@@ -179,28 +180,28 @@ class MediaDownloadBot(commands.Bot):
             print(f"Guild count: {len(self.guilds)}")
             print("================\n")
             
-            # Définir le statut initial
+            # Set initial status
             activity = discord.Activity(
                 type=discord.ActivityType.watching,
                 name=f"/help | {len(self.guilds)} servers"
             )
             await self.change_presence(status=discord.Status.online, activity=activity)
             
-            # Initialiser le channel de logs
+            # Initialize log channel
             if self.logs_channel_id:
                 self.log_channel = self.get_channel(self.logs_channel_id)
                 if self.log_channel:
                     embed = discord.Embed(
                         title="🟢 Bot Online",
-                        description="Bot has started successfully!",
+                        description="Bot has started successfully with interactive menus!",
                         color=0x00FF00,
                         timestamp=datetime.utcnow()
                     )
                     await self.log_channel.send(embed=embed)
             
-            logging.info('Initialisation terminée')
+            logging.info('Bot initialization completed')
         except Exception as e:
-            logging.error(f'Erreur lors de l\'initialisation: {e}')
+            logging.error(f'Error during initialization: {e}')
 
     async def status_check(self):
         """Vérifie périodiquement l'état du bot"""
