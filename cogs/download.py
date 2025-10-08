@@ -9,6 +9,7 @@ import zipfile
 import aiohttp
 import asyncio
 from utils.catbox import CatboxUploader
+from utils.smart_classifier import smart_classifier
 import psutil
 import os.path
 import time
@@ -122,7 +123,7 @@ class Download(commands.Cog):
 
     @app_commands.command(
         name="download",
-        description="Download media from messages (use 0 to search all channel messages)"
+        description="Download media from messages with smart organization (use 0 to search all channel messages)"
     )
     @app_commands.choices(type=[
         app_commands.Choice(name="🖼️ Images", value="images"),
@@ -219,19 +220,45 @@ class Download(commands.Cog):
                             pass
                     return
 
-                # Create zip with progress updates
-                await interaction.followup.send("📦 Creating zip file...")
+                # Smart organization of files
+                await interaction.followup.send("🧠 Organizing files by category...")
+                organized_files = smart_classifier.organize_with_minimum_threshold(downloaded_files)
+                
+                # Show organization stats
+                stats = smart_classifier.get_organization_stats(organized_files)
+                organization_info = f"📁 Organized into {stats['total_categories']} categories:\n"
+                for category, subcategories in stats['categories'].items():
+                    for subcategory, count in subcategories.items():
+                        organization_info += f"• {category}/{subcategory}: {count} files\n"
+                
+                await interaction.followup.send(organization_info)
+                
+                # Create organized zip with progress updates
+                await interaction.followup.send("📦 Creating organized zip file...")
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                zip_name = f"media_{type}_{timestamp}.zip"
+                zip_name = f"media_{type}_{timestamp}_organized.zip"
                 zip_path = os.path.join(temp_dir, zip_name)
                 
-                with zipfile.ZipFile(zip_path, 'w') as zip_file:
-                    for i, file in enumerate(downloaded_files):
-                        zip_file.write(file, os.path.basename(file))
-                        if i % 100 == 0:
-                            await interaction.followup.send(
-                                f"📦 Zipping files: {i+1}/{len(downloaded_files)}"
-                            )
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=DOWNLOAD_CONFIG['compress_level']) as zip_file:
+                    file_count = 0
+                    total_files = len(downloaded_files)
+                    
+                    for folder_key, file_list in organized_files.items():
+                        for file_path in file_list:
+                            filename = os.path.basename(file_path)
+                            # Create organized path in zip
+                            zip_internal_path = f"{folder_key}/{filename}"
+                            zip_file.write(file_path, zip_internal_path)
+                            
+                            file_count += 1
+                            if file_count % 10 == 0:
+                                await interaction.followup.send(
+                                    f"📦 Organizing files: {file_count}/{total_files}"
+                                )
+                
+                # Save classification log
+                log_path = os.path.join(temp_dir, f"classification_log_{timestamp}.json")
+                smart_classifier.save_classification_log(organized_files, log_path)
 
                 # Check zip size
                 file_size = os.path.getsize(zip_path)
@@ -348,6 +375,74 @@ class Download(commands.Cog):
         except Exception as e:
             logger.error(f"Error creating ZIP: {e}")
             raise
+
+    @app_commands.command(
+        name="test-classification",
+        description="Test the smart classification system with sample filenames"
+    )
+    async def test_classification(self, interaction: discord.Interaction):
+        """Test the smart classification system"""
+        try:
+            await interaction.response.defer(thinking=True)
+            
+            # Sample filenames for testing
+            test_files = [
+                "fortnite_victory_royale.mp4",
+                "minecraft_build_tutorial.jpg",
+                "valorant_spike_defuse.png",
+                "discord_screenshot.png",
+                "photoshop_edit_final.jpg",
+                "random_meme_funny.gif",
+                "unknown_file.mp4",
+                "another_random.jpg"
+            ]
+            
+            # Test classification
+            organized = smart_classifier.organize_with_minimum_threshold(test_files)
+            stats = smart_classifier.get_organization_stats(organized)
+            
+            # Create response embed
+            embed = discord.Embed(
+                title="🧠 Smart Classification Test",
+                description="Testing the intelligent file organization system",
+                color=0x00FF00
+            )
+            
+            embed.add_field(
+                name="Test Files",
+                value=f"```{chr(10).join(test_files)}```",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Organization Results",
+                value=f"**Total Categories:** {stats['total_categories']}\n**Total Files:** {stats['total_files']}",
+                inline=False
+            )
+            
+            # Show detailed organization
+            organization_text = ""
+            for category, subcategories in stats['categories'].items():
+                for subcategory, count in subcategories.items():
+                    organization_text += f"📁 **{category}/{subcategory}**: {count} files\n"
+            
+            embed.add_field(
+                name="Folder Structure",
+                value=organization_text or "No organization data",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Minimum Threshold",
+                value=f"Categories need at least **{smart_classifier.minimum_files}** files to be created",
+                inline=False
+            )
+            
+            await interaction.followup.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error in test_classification: {e}")
+            await interaction.followup.send("❌ Error testing classification system.")
 
 async def setup(bot):
     await bot.add_cog(Download(bot)) 

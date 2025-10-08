@@ -17,9 +17,11 @@ class HelpCog(commands.Cog):
         embed.add_field(
             name="/download",
             value=(
-                "Download media files from the channel\n"
+                "Download media files with smart organization\n"
                 "• Choose type: Images, Videos, or All\n"
                 "• Choose number of messages to scan\n"
+                "• 🧠 Automatic categorization by content\n"
+                "• 📁 Organized folders (min 3 files per category)\n"
                 "• Free: Up to 25MB direct download\n"
                 "• Vote required: Unlimited size with Gofile.io"
             ),
@@ -41,6 +43,12 @@ class HelpCog(commands.Cog):
         embed.add_field(
             name="/stats",
             value="Show bot statistics",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="/test-classification",
+            value="Test the smart file organization system",
             inline=False
         )
         
