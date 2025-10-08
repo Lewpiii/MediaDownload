@@ -282,8 +282,38 @@ class DateSelectionView(discord.ui.View):
     @discord.ui.button(label="🔙 Back", style=discord.ButtonStyle.secondary)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Go back to main menu"""
-        menu = InteractiveDownloadMenu(interaction.client)
-        await menu.create_main_menu(interaction)
+        embed = discord.Embed(
+            title="📥 Media Download Center",
+            description="Choose your download options below:",
+            color=0x00FF00,
+            timestamp=datetime.utcnow()
+        )
+        
+        embed.add_field(
+            name="🎯 Download Options",
+            value=(
+                "• **All Media**: Download everything from the channel\n"
+                "• **By Date**: Download media from a specific date range\n"
+                "• **By Type**: Download only images or videos\n"
+                "• **Recent**: Download from last X messages"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🧠 Smart Features",
+            value=(
+                "• **Auto-Organization**: Files sorted by category\n"
+                "• **Smart Folders**: Min 3 files per category\n"
+                "• **Resource Monitoring**: Automatic pausing if needed"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Click a button below to start!")
+        
+        view = DownloadMenuView()
+        await interaction.response.edit_message(embed=embed, view=view)
 
 class MediaTypeView(discord.ui.View):
     """Media type selection buttons"""
@@ -330,8 +360,38 @@ class MediaTypeView(discord.ui.View):
     @discord.ui.button(label="🔙 Back", style=discord.ButtonStyle.secondary)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Go back to main menu"""
-        menu = InteractiveDownloadMenu(interaction.client)
-        await menu.create_main_menu(interaction)
+        embed = discord.Embed(
+            title="📥 Media Download Center",
+            description="Choose your download options below:",
+            color=0x00FF00,
+            timestamp=datetime.utcnow()
+        )
+        
+        embed.add_field(
+            name="🎯 Download Options",
+            value=(
+                "• **All Media**: Download everything from the channel\n"
+                "• **By Date**: Download media from a specific date range\n"
+                "• **By Type**: Download only images or videos\n"
+                "• **Recent**: Download from last X messages"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🧠 Smart Features",
+            value=(
+                "• **Auto-Organization**: Files sorted by category\n"
+                "• **Smart Folders**: Min 3 files per category\n"
+                "• **Resource Monitoring**: Automatic pausing if needed"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Click a button below to start!")
+        
+        view = DownloadMenuView()
+        await interaction.response.edit_message(embed=embed, view=view)
 
 class ConfirmationView(discord.ui.View):
     """Final confirmation buttons"""
@@ -352,17 +412,46 @@ class ConfirmationView(discord.ui.View):
             # Start download with the selected options
             await download_cog.start_interactive_download(interaction, self.options)
         else:
-            await interaction.edit_original_response(
-                content="❌ Download system not available. Please try again later.",
-                embed=None,
-                view=None
+            await interaction.response.send_message(
+                "❌ Download system not available. Please try again later.",
+                ephemeral=True
             )
     
     @discord.ui.button(label="🔙 Back", style=discord.ButtonStyle.secondary)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Go back to main menu"""
-        menu = InteractiveDownloadMenu(interaction.client)
-        await menu.create_main_menu(interaction)
+        embed = discord.Embed(
+            title="📥 Media Download Center",
+            description="Choose your download options below:",
+            color=0x00FF00,
+            timestamp=datetime.utcnow()
+        )
+        
+        embed.add_field(
+            name="🎯 Download Options",
+            value=(
+                "• **All Media**: Download everything from the channel\n"
+                "• **By Date**: Download media from a specific date range\n"
+                "• **By Type**: Download only images or videos\n"
+                "• **Recent**: Download from last X messages"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🧠 Smart Features",
+            value=(
+                "• **Auto-Organization**: Files sorted by category\n"
+                "• **Smart Folders**: Min 3 files per category\n"
+                "• **Resource Monitoring**: Automatic pausing if needed"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Click a button below to start!")
+        
+        view = DownloadMenuView()
+        await interaction.response.edit_message(embed=embed, view=view)
     
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):

@@ -147,11 +147,8 @@ class Download(commands.Cog):
     async def start_interactive_download(self, interaction: discord.Interaction, options: dict):
         """Start download process with interactive options"""
         try:
-            await interaction.edit_original_response(
-                content="🚀 Starting download process...",
-                embed=None,
-                view=None
-            )
+            # Respond to the interaction immediately to avoid timeout
+            await interaction.response.defer()
             
             # Extract options
             media_type = options.get('media_type', 'all')
@@ -174,17 +171,25 @@ class Download(commands.Cog):
             # Set message limit
             message_limit = None if message_limit <= 0 else message_limit
             
-            # Send initial status
-            status_embed = discord.Embed(
-                title="📥 Download Started",
-                description=f"**Media Type**: {media_type.title()}\n**Date Range**: {date_range}\n**Message Limit**: {'All messages' if message_limit is None else f'{message_limit} messages'}",
-                color=0x00FF00,
+            # Create progress embed that we'll update
+            progress_embed = discord.Embed(
+                title="📥 Téléchargement en cours",
+                color=0x3498db,
                 timestamp=datetime.utcnow()
             )
-            await interaction.followup.send(embed=status_embed)
+            progress_embed.add_field(
+                name="⚙️ Configuration",
+                value=f"**Type**: {media_type.title()}\n**Période**: {date_range}\n**Limite**: {'Tous les messages' if message_limit is None else f'{message_limit} messages'}",
+                inline=False
+            )
+            progress_embed.add_field(
+                name="📊 Statut",
+                value="🔍 Recherche des messages...",
+                inline=False
+            )
+            progress_embed.set_footer(text="Le téléchargement est en cours...")
             
-            if message_limit is None:
-                await interaction.followup.send("🔍 Searching through all channel messages... This might take a while.")
+            await interaction.followup.send(embed=progress_embed)
             
             try:
                 # Fetch messages
@@ -194,7 +199,15 @@ class Download(commands.Cog):
                 
                 total_messages = len(channel_messages)
                 logger.debug(f"Successfully fetched {total_messages} messages")
-                await interaction.followup.send(f"📥 Found {total_messages} messages, starting media download...")
+                
+                # Update progress
+                progress_embed.set_field_at(
+                    1,
+                    name="📊 Statut",
+                    value=f"✅ Trouvé {total_messages} messages\n📥 Téléchargement des médias...",
+                    inline=False
+                )
+                await interaction.edit_original_response(embed=progress_embed)
 
                 # Process messages and extract attachments
                 for msg in channel_messages:
@@ -207,7 +220,13 @@ class Download(commands.Cog):
                                 # Check if we should pause due to resource usage
                                 should_pause, reason = monitor.should_pause()
                                 if should_pause:
-                                    await interaction.followup.send(f"⏸️ Pausing download: {reason}. Waiting 30 seconds...")
+                                    progress_embed.set_field_at(
+                                        1,
+                                        name="📊 Statut",
+                                        value=f"⏸️ Pause: {reason}\nAttente de 30 secondes...",
+                                        inline=False
+                                    )
+                                    await interaction.edit_original_response(embed=progress_embed)
                                     await asyncio.sleep(30)
                                 
                                 # Download directly to SSD - NO RAM usage
@@ -219,49 +238,66 @@ class Download(commands.Cog):
                                     
                                     # Update progress every 5 files
                                     if len(downloaded_files) % 5 == 0:
-                                        eta = monitor.estimate_remaining_time()
-                                        progress_embed = discord.Embed(
-                                            title="📊 Download Progress",
-                                            description=f"**Files Downloaded**: {len(downloaded_files)}\n**Total Size**: {total_size/1024/1024:.1f}MB\n**ETA**: {eta}",
-                                            color=0x3498db
+                                        progress_percent = (len(downloaded_files) / max(1, total_messages)) * 100
+                                        progress_bar = self._create_progress_bar(progress_percent)
+                                        
+                                        progress_embed.set_field_at(
+                                            1,
+                                            name="📊 Progression",
+                                            value=f"{progress_bar}\n**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {total_size/1024/1024:.1f}MB",
+                                            inline=False
                                         )
-                                        await interaction.followup.send(embed=progress_embed)
+                                        await interaction.edit_original_response(embed=progress_embed)
                 
                 if not downloaded_files:
-                    no_files_embed = discord.Embed(
-                        title="❌ No Media Found",
-                        description=f"No {media_type} files found in the selected range.",
-                        color=0xFF0000
+                    progress_embed.title = "❌ Aucun média trouvé"
+                    progress_embed.color = 0xFF0000
+                    progress_embed.set_field_at(
+                        1,
+                        name="📊 Résultat",
+                        value=f"Aucun fichier {media_type} trouvé dans la période sélectionnée.",
+                        inline=False
                     )
-                    await interaction.followup.send(embed=no_files_embed)
+                    await interaction.edit_original_response(embed=progress_embed)
                     return
 
                 # Smart organization of files
-                await interaction.followup.send("🧠 Organizing files by category...")
+                progress_embed.set_field_at(
+                    1,
+                    name="📊 Statut",
+                    value=f"🧠 Organisation intelligente de {len(downloaded_files)} fichiers...",
+                    inline=False
+                )
+                await interaction.edit_original_response(embed=progress_embed)
+                
                 organized_files = smart_classifier.organize_with_minimum_threshold(downloaded_files)
                 
                 # Show organization stats
                 stats = smart_classifier.get_organization_stats(organized_files)
-                organization_embed = discord.Embed(
-                    title="📁 File Organization",
-                    description=f"Organized {stats['total_files']} files into {stats['total_categories']} categories:",
-                    color=0x9B59B6
-                )
                 
+                # Update embed with organization info
+                org_text = f"📁 **{stats['total_files']} fichiers** organisés en **{stats['total_categories']} catégories**\n\n"
                 for category, subcategories in stats['categories'].items():
-                    category_text = ""
                     for subcategory, count in subcategories.items():
-                        category_text += f"• **{subcategory}**: {count} files\n"
-                    organization_embed.add_field(
-                        name=f"📂 {category}",
-                        value=category_text,
-                        inline=True
-                    )
+                        org_text += f"• {category}/{subcategory}: {count} fichiers\n"
                 
-                await interaction.followup.send(embed=organization_embed)
+                progress_embed.set_field_at(
+                    1,
+                    name="📊 Organisation",
+                    value=org_text[:1024],  # Discord field limit
+                    inline=False
+                )
+                await interaction.edit_original_response(embed=progress_embed)
                 
                 # Create organized zip with progress updates
-                await interaction.followup.send("📦 Creating organized zip file...")
+                progress_embed.set_field_at(
+                    1,
+                    name="📊 Statut",
+                    value="📦 Création du fichier ZIP...",
+                    inline=False
+                )
+                await interaction.edit_original_response(embed=progress_embed)
+                
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_name = f"media_{media_type}_{timestamp}_organized.zip"
                 zip_path = os.path.join(temp_dir, zip_name)
@@ -279,9 +315,15 @@ class Download(commands.Cog):
                             
                             file_count += 1
                             if file_count % 10 == 0:
-                                await interaction.followup.send(
-                                    f"📦 Organizing files: {file_count}/{total_files}"
+                                zip_progress = (file_count / total_files) * 100
+                                zip_bar = self._create_progress_bar(zip_progress)
+                                progress_embed.set_field_at(
+                                    1,
+                                    name="📊 Création du ZIP",
+                                    value=f"{zip_bar}\n**Fichiers compressés**: {file_count}/{total_files}",
+                                    inline=False
                                 )
+                                await interaction.edit_original_response(embed=progress_embed)
                 
                 # Save classification log
                 log_path = os.path.join(temp_dir, f"classification_log_{timestamp}.json")
@@ -294,40 +336,58 @@ class Download(commands.Cog):
                 if file_size > MAX_DIRECT_DOWNLOAD_SIZE:
                     # Upload to Catbox
                     logger.debug("File too large, using Catbox")
+                    progress_embed.set_field_at(
+                        1,
+                        name="📊 Statut",
+                        value="☁️ Upload vers Catbox (fichier trop gros pour Discord)...",
+                        inline=False
+                    )
+                    await interaction.edit_original_response(embed=progress_embed)
+                    
                     try:
                         uploader = CatboxUploader()
                         with open(zip_path, 'rb') as f:
                             file_data = f.read()
                         url = await uploader.upload_file(filename=zip_name, file_data=file_data)
                         
-                        success_embed = discord.Embed(
-                            title="✅ Download Complete!",
-                            description=f"**Files Downloaded**: {len(downloaded_files)}\n**Total Size**: {file_size / (1024*1024):.2f}MB\n**Organization**: Smart categorized folders",
-                            color=0x00FF00
-                        )
-                        success_embed.add_field(
-                            name="📥 Download Link",
-                            value=f"[Click here to download]({url})",
+                        # Final success embed
+                        progress_embed.title = "✅ Téléchargement terminé !"
+                        progress_embed.color = 0x00FF00
+                        progress_embed.set_field_at(
+                            1,
+                            name="📊 Résultats",
+                            value=f"**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {file_size / (1024*1024):.2f}MB\n**Organisation**: Dossiers catégorisés intelligemment\n\n[📥 Cliquez ici pour télécharger]({url})",
                             inline=False
                         )
-                        await interaction.followup.send(embed=success_embed)
+                        progress_embed.set_footer(text="Téléchargement réussi !")
+                        await interaction.edit_original_response(embed=progress_embed)
                     except Exception as e:
                         logger.error(f"Failed to upload to Catbox: {e}")
-                        error_embed = discord.Embed(
-                            title="❌ Upload Error",
-                            description="Failed to upload large file. Please try again later.",
-                            color=0xFF0000
+                        progress_embed.title = "❌ Erreur d'upload"
+                        progress_embed.color = 0xFF0000
+                        progress_embed.set_field_at(
+                            1,
+                            name="📊 Erreur",
+                            value="Impossible d'uploader le fichier. Veuillez réessayer plus tard.",
+                            inline=False
                         )
-                        await interaction.followup.send(embed=error_embed)
+                        await interaction.edit_original_response(embed=progress_embed)
                 else:
                     # Send directly via Discord
                     logger.debug("Sending file via Discord")
-                    success_embed = discord.Embed(
-                        title="✅ Download Complete!",
-                        description=f"**Files Downloaded**: {len(downloaded_files)}\n**Total Size**: {file_size / (1024*1024):.2f}MB\n**Organization**: Smart categorized folders",
-                        color=0x00FF00
+                    progress_embed.title = "✅ Téléchargement terminé !"
+                    progress_embed.color = 0x00FF00
+                    progress_embed.set_field_at(
+                        1,
+                        name="📊 Résultats",
+                        value=f"**Fichiers téléchargés**: {len(downloaded_files)}\n**Taille totale**: {file_size / (1024*1024):.2f}MB\n**Organisation**: Dossiers catégorisés intelligemment",
+                        inline=False
                     )
-                    await interaction.followup.send(embed=success_embed, file=discord.File(zip_path))
+                    progress_embed.set_footer(text="Téléchargement réussi !")
+                    await interaction.edit_original_response(embed=progress_embed)
+                    
+                    # Send file in a separate message
+                    await interaction.followup.send(file=discord.File(zip_path))
 
             finally:
                 # Cleanup
@@ -350,6 +410,12 @@ class Download(commands.Cog):
             )
             await interaction.followup.send(embed=error_embed)
 
+    def _create_progress_bar(self, percent: float, length: int = 20) -> str:
+        """Create a visual progress bar"""
+        filled = int(length * percent / 100)
+        bar = "█" * filled + "░" * (length - filled)
+        return f"{bar} {percent:.1f}%"
+    
     async def download_file_in_chunks(self, url: str, file_path: str, chunk_size: int = None):
         """Download a file in chunks and save directly to disk (SSD) - NO RAM usage"""
         try:
