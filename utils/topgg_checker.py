@@ -55,41 +55,41 @@ class TopGGChecker:
             return True  # En cas d'erreur, on autorise
     
     async def create_vote_embed(self) -> discord.Embed:
-        """Crée un embed demandant à l'utilisateur de voter"""
+        """Creates an embed asking the user to vote"""
         embed = discord.Embed(
-            title="🗳️ Vote requis !",
+            title="🗳️ Vote Required!",
             description=(
-                "Pour utiliser cette commande, vous devez d'abord voter pour le bot sur **top.gg**.\n\n"
-                "C'est **gratuit** et ne prend que **quelques secondes** !\n"
-                "Votre vote nous aide énormément à faire connaître le bot. 💙"
+                "To use this feature, you need to **vote for the bot** on **top.gg** first.\n\n"
+                "It's **completely free** and takes only **a few seconds**!\n"
+                "Your vote helps us tremendously to grow and improve the bot. 💙"
             ),
             color=0xFF6B6B,
             timestamp=discord.utils.utcnow()
         )
         
         embed.add_field(
-            name="✨ Avantages",
+            name="✨ Benefits",
             value=(
-                "• Accès à toutes les commandes de téléchargement\n"
-                "• Organisation intelligente des fichiers\n"
-                "• Téléchargements illimités pendant 12h\n"
-                "• Support du bot et développement de nouvelles fonctionnalités"
+                "• Access to all download commands\n"
+                "• Smart file organization\n"
+                "• Unlimited downloads for 12 hours\n"
+                "• Support bot development and new features"
             ),
             inline=False
         )
         
         embed.add_field(
-            name="📝 Comment voter ?",
+            name="📝 How to vote?",
             value=(
-                "1. Cliquez sur le lien ci-dessous\n"
-                "2. Connectez-vous avec votre compte Discord\n"
-                "3. Cliquez sur le bouton **Vote**\n"
-                "4. Revenez ici et réessayez la commande !"
+                "1. Click the button below\n"
+                "2. Login with your Discord account\n"
+                "3. Click the **Vote** button\n"
+                "4. Come back here and try again!"
             ),
             inline=False
         )
         
-        embed.set_footer(text="Le vote dure 12 heures • Merci de votre soutien !")
+        embed.set_footer(text="Vote lasts 12 hours • Thank you for your support!")
         
         return embed
     

@@ -128,7 +128,6 @@ class Download(commands.Cog):
         name="download",
         description="Open interactive download menu with smart file organization"
     )
-    @require_vote()
     async def download_media(self, interaction: discord.Interaction):
         """
         Open interactive download menu for media files.

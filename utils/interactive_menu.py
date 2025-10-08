@@ -403,6 +403,19 @@ class ConfirmationView(discord.ui.View):
     @discord.ui.button(label="✅ Start Download", style=discord.ButtonStyle.success)
     async def start_download(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Start the download process"""
+        # Check if user has voted on top.gg
+        checker = getattr(interaction.client, 'topgg_checker', None)
+        
+        if checker:
+            has_voted = await checker.has_voted(interaction.user.id)
+            if not has_voted:
+                # User hasn't voted, show vote requirement
+                embed = await checker.create_vote_embed()
+                view = checker.get_vote_button()
+                await interaction.response.edit_message(embed=embed, view=view)
+                return
+        
+        # User has voted or vote check is disabled, proceed with download
         # Import here to avoid circular imports
         from cogs.download import Download
         
