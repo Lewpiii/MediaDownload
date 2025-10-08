@@ -18,6 +18,8 @@ class TopGGChecker:
         self.bot = bot
         self.token = TOP_GG_TOKEN
         self.api_url = "https://top.gg/api"
+        print(f"[DEBUG] TopGGChecker initialized with token: {'Yes' if self.token else 'No'}")
+        print(f"[DEBUG] Bot ID: {bot.user.id if bot.user else 'Not ready'}")
         
     async def has_voted(self, user_id: int) -> bool:
         """
@@ -29,7 +31,10 @@ class TopGGChecker:
         Returns:
             True si l'utilisateur a voté, False sinon
         """
+        print(f"[DEBUG] Checking vote for user {user_id}")
+        
         if not self.token:
+            print("[DEBUG] TOP_GG_TOKEN not configured, allowing access")
             logger.warning("TOP_GG_TOKEN not configured, skipping vote check")
             return True  # Si pas de token, on autorise tout le monde
             
@@ -39,18 +44,25 @@ class TopGGChecker:
             }
             
             url = f"{self.api_url}/bots/{self.bot.user.id}/check?userId={user_id}"
+            print(f"[DEBUG] Making API request to: {url}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:
+                    print(f"[DEBUG] API response status: {response.status}")
                     if response.status == 200:
                         data = await response.json()
+                        print(f"[DEBUG] API response data: {data}")
                         # L'API retourne {"voted": 1} si l'utilisateur a voté dans les 12h
-                        return data.get('voted', 0) == 1
+                        voted = data.get('voted', 0) == 1
+                        print(f"[DEBUG] User voted status: {voted}")
+                        return voted
                     else:
+                        print(f"[DEBUG] API error: {response.status}")
                         logger.error(f"Top.gg API error: {response.status}")
                         return True  # En cas d'erreur API, on autorise
                         
         except Exception as e:
+            print(f"[DEBUG] Exception in vote check: {e}")
             logger.error(f"Error checking vote status: {e}")
             return True  # En cas d'erreur, on autorise
     

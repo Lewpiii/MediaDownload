@@ -403,18 +403,30 @@ class ConfirmationView(discord.ui.View):
     @discord.ui.button(label="✅ Start Download", style=discord.ButtonStyle.success)
     async def start_download(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Start the download process"""
+        print(f"[DEBUG] Start Download clicked by {interaction.user.name} (ID: {interaction.user.id})")
+        
         # Check if user has voted on top.gg
         checker = getattr(interaction.client, 'topgg_checker', None)
+        print(f"[DEBUG] Top.gg checker found: {checker is not None}")
         
         if checker:
+            print(f"[DEBUG] Checking vote status for user {interaction.user.id}")
             has_voted = await checker.has_voted(interaction.user.id)
+            print(f"[DEBUG] User has voted: {has_voted}")
+            
+            # FORCE TEST: Always show vote requirement for testing
+            # Remove this line when testing is complete
+            has_voted = False
+            
             if not has_voted:
+                print(f"[DEBUG] User hasn't voted, showing vote requirement")
                 # User hasn't voted, show vote requirement
                 embed = await checker.create_vote_embed()
                 view = checker.get_vote_button()
                 await interaction.response.edit_message(embed=embed, view=view)
                 return
         
+        print(f"[DEBUG] Proceeding with download (voted or no checker)")
         # User has voted or vote check is disabled, proceed with download
         # Import here to avoid circular imports
         from cogs.download import Download
