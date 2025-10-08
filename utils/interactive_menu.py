@@ -88,7 +88,7 @@ class InteractiveDownloadMenu:
         
         view = DateSelectionView()
         
-        await interaction.edit_original_response(embed=embed, view=view)
+        await interaction.response.edit_message(embed=embed, view=view)
         
         # Update menu state
         if interaction.user.id in self.active_menus:
@@ -126,7 +126,7 @@ class InteractiveDownloadMenu:
         
         view = MediaTypeView()
         
-        await interaction.edit_original_response(embed=embed, view=view)
+        await interaction.response.edit_message(embed=embed, view=view)
         
         # Update menu state
         if interaction.user.id in self.active_menus:
@@ -178,7 +178,7 @@ class InteractiveDownloadMenu:
         
         view = ConfirmationView(options)
         
-        await interaction.edit_original_response(embed=embed, view=view)
+        await interaction.response.edit_message(embed=embed, view=view)
         
         # Update menu state
         if interaction.user.id in self.active_menus:
@@ -223,7 +223,7 @@ class DownloadMenuView(discord.ui.View):
             description="No files were downloaded.",
             color=0xFF0000
         )
-        await interaction.edit_original_response(embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=None)
 
 class DateSelectionView(discord.ui.View):
     """Date selection buttons"""
@@ -461,4 +461,4 @@ class ConfirmationView(discord.ui.View):
             description="No files were downloaded.",
             color=0xFF0000
         )
-        await interaction.edit_original_response(embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=None)
