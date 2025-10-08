@@ -19,4 +19,13 @@ jobs:
             git pull
             source ../venv/bin/activate
             pip install -r requirements.txt
+            
+            # Configure environment variables
+            echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" > .env
+            echo "TOP_GG_TOKEN=${{ secrets.TOP_GG_TOKEN }}" >> .env
+            echo "LOGS_CHANNEL_ID=${{ secrets.LOGS_CHANNEL_ID }}" >> .env
+            echo "WEBHOOK_URL=${{ secrets.WEBHOOK_URL }}" >> .env
+            echo "GOFILE_TOKEN=${{ secrets.GOFILE_TOKEN }}" >> .env
+            
+            # Restart the bot service
             sudo /bin/systemctl restart discord-bot 
