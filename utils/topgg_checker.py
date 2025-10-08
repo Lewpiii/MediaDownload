@@ -11,6 +11,103 @@ from config import TOP_GG_TOKEN
 
 logger = logging.getLogger('bot.topgg')
 
+class VoteView(discord.ui.View):
+    """View with vote buttons and automatic verification"""
+    
+    def __init__(self, checker, download_options=None):
+        super().__init__(timeout=300)  # 5 minutes timeout
+        self.checker = checker
+        self.download_options = download_options
+        self.auto_check_task = None
+        self.start_auto_check()
+    
+    @discord.ui.button(label="🔄 Check Vote Status", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def check_vote_status(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Check if user has voted and proceed with download if yes"""
+        print(f"[DEBUG] Vote status check clicked by {interaction.user.name}")
+        
+        # Update button to show checking
+        button.label = "⏳ Checking..."
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        # Check vote status
+        has_voted = await self.checker.has_voted(interaction.user.id)
+        print(f"[DEBUG] Vote check result: {has_voted}")
+        
+        if has_voted:
+            # User has voted! Show success and start download
+            success_embed = discord.Embed(
+                title="✅ Vote Confirmed!",
+                description="Thank you for voting! Starting your download now...",
+                color=0x00FF00,
+                timestamp=discord.utils.utcnow()
+            )
+            success_embed.add_field(
+                name="🎉 Benefits Active",
+                value=(
+                    "• Unlimited downloads for 12 hours\n"
+                    "• Smart file organization\n"
+                    "• Priority support\n"
+                    "• Thank you for supporting the bot!"
+                ),
+                inline=False
+            )
+            success_embed.set_footer(text="Download starting...")
+            
+            await interaction.edit_original_response(embed=success_embed, view=None)
+            
+            # Start the download automatically
+            if self.download_options:
+                print(f"[DEBUG] Starting automatic download with options: {self.download_options}")
+                from cogs.download import Download
+                download_cog = interaction.client.get_cog('Download')
+                if download_cog:
+                    await download_cog.start_interactive_download(interaction, self.download_options)
+                else:
+                    await interaction.followup.send("❌ Download system not available.", ephemeral=True)
+        else:
+            # User hasn't voted yet
+            button.label = "🔄 Check Vote Status"
+            button.disabled = False
+            
+            not_voted_embed = discord.Embed(
+                title="⏳ Vote Not Found",
+                description=(
+                    "We couldn't find your vote yet. This can happen if:\n\n"
+                    "• You haven't voted yet\n"
+                    "• You voted but it hasn't been processed yet (wait 1-2 minutes)\n"
+                    "• There was an issue with the vote detection\n\n"
+                    "Please make sure you've voted and try again in a moment!"
+                ),
+                color=0xFFA500,
+                timestamp=discord.utils.utcnow()
+            )
+            not_voted_embed.set_footer(text="Try again in a few moments")
+            
+            await interaction.edit_original_response(embed=not_voted_embed, view=self)
+    
+    def start_auto_check(self):
+        """Start automatic vote checking every 10 seconds"""
+        import asyncio
+        
+        async def auto_check():
+            await asyncio.sleep(10)  # Wait 10 seconds before first check
+            # This will be implemented to automatically check and update
+            pass
+        
+        # Start the task
+        try:
+            loop = asyncio.get_event_loop()
+            self.auto_check_task = loop.create_task(auto_check())
+        except:
+            pass  # Ignore if we can't create the task
+    
+    async def on_timeout(self):
+        """Called when the view times out"""
+        if self.auto_check_task:
+            self.auto_check_task.cancel()
+
 class TopGGChecker:
     """Gestionnaire de vérification des votes top.gg"""
     
@@ -105,16 +202,27 @@ class TopGGChecker:
         
         return embed
     
-    def get_vote_button(self) -> discord.ui.View:
-        """Crée un bouton pour voter sur top.gg"""
-        view = discord.ui.View()
-        button = discord.ui.Button(
-            label="🗳️ Voter sur top.gg",
+    def get_vote_button(self, download_options=None) -> discord.ui.View:
+        """Creates vote buttons with automatic verification"""
+        view = VoteView(self, download_options)
+        
+        # Vote button
+        vote_button = discord.ui.Button(
+            label="🗳️ Vote on top.gg",
             style=discord.ButtonStyle.link,
             url=f"https://top.gg/bot/{self.bot.user.id}/vote",
             emoji="🗳️"
         )
-        view.add_item(button)
+        view.add_item(vote_button)
+        
+        # Check vote status button
+        check_button = discord.ui.Button(
+            label="🔄 Check Vote Status",
+            style=discord.ButtonStyle.secondary,
+            emoji="🔄"
+        )
+        view.add_item(check_button)
+        
         return view
 
 

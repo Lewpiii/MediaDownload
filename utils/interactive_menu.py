@@ -422,7 +422,7 @@ class ConfirmationView(discord.ui.View):
                 print(f"[DEBUG] User hasn't voted, showing vote requirement")
                 # User hasn't voted, show vote requirement
                 embed = await checker.create_vote_embed()
-                view = checker.get_vote_button()
+                view = checker.get_vote_button(self.options)  # Pass download options
                 await interaction.response.edit_message(embed=embed, view=view)
                 return
         
