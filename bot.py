@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from utils.logging import Logger
 from utils.catbox import CatboxUploader
+from utils.performance import performance_optimizer
 import logging
 import sys
 
@@ -94,6 +95,10 @@ class MediaDownloadBot(commands.Bot):
         """Configuration initiale du bot"""
         try:
             logging.info("Starting setup hook...")
+            
+            # Apply performance optimizations
+            await performance_optimizer.optimize_system()
+            logging.info("Performance optimizations applied")
             
             # Charger les cogs
             if not os.path.exists('./cogs'):
@@ -182,8 +187,8 @@ class MediaDownloadBot(commands.Bot):
             await self.change_presence(status=discord.Status.online, activity=activity)
             
             # Initialiser le channel de logs
-            if logs_channel_id := os.getenv('LOGS_CHANNEL_ID'):
-                self.log_channel = self.get_channel(int(logs_channel_id))
+            if self.logs_channel_id:
+                self.log_channel = self.get_channel(self.logs_channel_id)
                 if self.log_channel:
                     embed = discord.Embed(
                         title="🟢 Bot Online",
@@ -289,8 +294,8 @@ class MediaDownloadBot(commands.Bot):
                     await webhook.send(embed=embed)
             
             # Sinon, envoyer dans le canal de logs si configuré
-            elif logs_channel_id := os.getenv('LOGS_CHANNEL_ID'):
-                channel = self.get_channel(int(logs_channel_id))
+            elif self.logs_channel_id:
+                channel = self.get_channel(self.logs_channel_id)
                 if channel:
                     await channel.send(embed=embed)
 

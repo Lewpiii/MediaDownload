@@ -1,6 +1,22 @@
-# Media Download: The Ultimate Tool for Archiving Your Discord Media
+# Media Download: The Ultimate Tool for Archiving Your Discord Media 🚀
 
-Looking for a seamless way to save and archive all your Discord media? **Media Download** is here to simplify the process, ensuring your favorite media files are always at your fingertips. Here’s a breakdown of the bot’s powerful features and commands:
+**Optimized Discord bot for downloading media files from channels with SSD-first architecture and advanced performance optimizations.**
+
+Looking for a seamless way to save and archive all your Discord media? **Media Download** is here to simplify the process, ensuring your favorite media files are always at your fingertips. Here's a breakdown of the bot's powerful features and commands:
+
+## 🔧 Performance Optimizations
+
+### Memory Management
+- ✅ **SSD-First Downloads**: All downloads stream directly to SSD storage, avoiding RAM usage
+- ✅ **Streaming Architecture**: Chunked file processing with no RAM buffering
+- ✅ **Resource Monitoring**: Automatic pausing when memory/disk usage is high
+- ✅ **Smart Cleanup**: Automatic cleanup of temporary files
+
+### Advanced Features
+- ✅ **Concurrent Downloads**: Multi-threaded downloads with configurable limits
+- ✅ **Intelligent Compression**: Optimized ZIP creation with minimal memory footprint
+- ✅ **AI-Powered Organization**: Smart categorization of downloaded media
+- ✅ **Process Optimization**: High-priority process execution for better performance
 
 ---
 

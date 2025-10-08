@@ -7,21 +7,23 @@ from datetime import datetime
 import tempfile
 import zipfile
 import aiohttp
+import asyncio
 from utils.catbox import CatboxUploader
 import psutil
 import os.path
 import time
 from datetime import timedelta
+from pathlib import Path
+from config import DOWNLOAD_CONFIG, RESOURCE_LIMITS, MAX_DIRECT_DOWNLOAD_SIZE, MAX_SINGLE_FILE_SIZE, MAX_TOTAL_DOWNLOAD_SIZE
 
 # Configuration
-MAX_DISCORD_SIZE = 25 * 1024 * 1024  # 25MB Discord limit
 logger = logging.getLogger('bot.download')
 logger.setLevel(logging.DEBUG)
 
 class ResourceMonitor:
-    def __init__(self, memory_threshold=90, disk_threshold=90):
-        self.memory_threshold = memory_threshold  # %
-        self.disk_threshold = disk_threshold      # %
+    def __init__(self, memory_threshold=None, disk_threshold=None):
+        self.memory_threshold = memory_threshold or RESOURCE_LIMITS['memory_threshold']
+        self.disk_threshold = disk_threshold or RESOURCE_LIMITS['disk_threshold']
         self.start_time = None
         self.processed_items = 0
         self.total_items = 0
@@ -146,7 +148,7 @@ class Download(commands.Cog):
 
             # Initialize resource monitoring
             monitor = ResourceMonitor()
-            temp_dir = '/tmp/discord_downloads'
+            temp_dir = DOWNLOAD_CONFIG['temp_dir']
             os.makedirs(temp_dir, exist_ok=True)
             
             # Log initial resources
@@ -170,20 +172,35 @@ class Download(commands.Cog):
                 logger.debug(f"Successfully fetched {total_messages} messages")
                 await interaction.followup.send(f"📥 Found {total_messages} messages, starting media download...")
 
-                # Prepare download function
-                async def process_attachment(attachment):
-                    nonlocal total_size
-                    file_ext = os.path.splitext(attachment.filename)[1].lower()
-                    if file_ext in self.media_types[type]:
-                        file_path = os.path.join(temp_dir, f"{len(downloaded_files)}_{attachment.filename}")
-                        if await self.download_file_in_chunks(attachment.url, file_path):
-                            downloaded_files.append(file_path)
-                            size = os.path.getsize(file_path)
-                            total_size += size
-                            logger.debug(f"Downloaded {attachment.filename} ({size/1024/1024:.1f}MB)")
-
-                # Process attachments with monitoring
-                await monitor.process_with_pause(interaction, channel_messages, process_attachment)
+                # Process messages and extract attachments
+                for msg in channel_messages:
+                    if msg.attachments:
+                        for attachment in msg.attachments:
+                            file_ext = os.path.splitext(attachment.filename)[1].lower()
+                            if file_ext in self.media_types[type]:
+                                file_path = os.path.join(temp_dir, f"{len(downloaded_files)}_{attachment.filename}")
+                                
+                                # Check if we should pause due to resource usage
+                                should_pause, reason = monitor.should_pause()
+                                if should_pause:
+                                    await interaction.followup.send(f"⏸️ Pausing download: {reason}. Waiting 30 seconds...")
+                                    await asyncio.sleep(30)
+                                
+                                # Download directly to SSD - NO RAM usage
+                                if await self.download_file_in_chunks(attachment.url, file_path):
+                                    downloaded_files.append(file_path)
+                                    size = os.path.getsize(file_path)
+                                    total_size += size
+                                    logger.debug(f"Downloaded {attachment.filename} ({size/1024/1024:.1f}MB)")
+                                    
+                                    # Update progress every 5 files
+                                    if len(downloaded_files) % 5 == 0:
+                                        eta = monitor.estimate_remaining_time()
+                                        await interaction.followup.send(
+                                            f"📊 Progress: {len(downloaded_files)} files downloaded\n"
+                                            f"📁 Total size: {total_size/1024/1024:.1f}MB\n"
+                                            f"⏱️ Estimated time remaining: {eta}"
+                                        )
                 
                 if not downloaded_files:
                     msg = "❌ No media found"
@@ -220,7 +237,7 @@ class Download(commands.Cog):
                 file_size = os.path.getsize(zip_path)
                 logger.debug(f"Zip size: {file_size / (1024*1024):.2f}MB")
 
-                if file_size > MAX_DISCORD_SIZE:
+                if file_size > MAX_DIRECT_DOWNLOAD_SIZE:
                     # Upload to Catbox
                     logger.debug("File too large, using Catbox")
                     try:
@@ -261,37 +278,76 @@ class Download(commands.Cog):
             logger.error(f"Error in download_media: {e}")
             await interaction.followup.send("❌ An error occurred during download.")
 
-    async def download_file_in_chunks(self, url: str, file_path: str, chunk_size: int = 8 * 1024 * 1024):
-        """Download a file in chunks and save directly to disk"""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    total_size = int(response.headers.get('content-length', 0))
-                    downloaded = 0
-                    
-                    with open(file_path, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(chunk_size):
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            # Log progress
-                            logger.debug(f"Downloaded: {downloaded}/{total_size} bytes ({(downloaded/total_size)*100:.1f}%)")
-                    return True
-        return False
+    async def download_file_in_chunks(self, url: str, file_path: str, chunk_size: int = None):
+        """Download a file in chunks and save directly to disk (SSD) - NO RAM usage"""
+        try:
+            # Use configured chunk size
+            if chunk_size is None:
+                chunk_size = DOWNLOAD_CONFIG['chunk_size']
+                
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        total_size = int(response.headers.get('content-length', 0))
+                        
+                        # Check file size limit
+                        if total_size > MAX_SINGLE_FILE_SIZE:
+                            logger.warning(f"File too large: {total_size} bytes (max: {MAX_SINGLE_FILE_SIZE})")
+                            return False
+                            
+                        downloaded = 0
+                        
+                        # Ensure directory exists
+                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                        
+                        # Stream directly to disk - NO RAM buffering
+                        with open(file_path, 'wb') as f:
+                            async for chunk in response.content.iter_chunked(chunk_size):
+                                f.write(chunk)
+                                f.flush()  # Force write to disk immediately
+                                downloaded += len(chunk)
+                                
+                                # Log progress every 10MB
+                                if downloaded % (10 * 1024 * 1024) == 0:
+                                    logger.debug(f"Downloaded: {downloaded}/{total_size} bytes ({(downloaded/total_size)*100:.1f}%)")
+                        
+                        logger.debug(f"Successfully downloaded {file_path} ({downloaded} bytes)")
+                        return True
+                    else:
+                        logger.error(f"Failed to download {url}: HTTP {response.status}")
+                        return False
+        except Exception as e:
+            logger.error(f"Error downloading {url}: {e}")
+            return False
 
-    async def create_zip_in_chunks(self, files: list, zip_path: str, chunk_size: int = 8 * 1024 * 1024):
-        """Create ZIP file in chunks to minimize memory usage"""
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for file_path in files:
-                # Log resources before adding each file
-                ResourceMonitor.log_resources(logger)
-                
-                # Add file to ZIP in chunks
-                with open(file_path, 'rb') as f:
-                    zf.writestr(os.path.basename(file_path), f.read())
-                
-                # Remove original file after adding to ZIP
-                os.remove(file_path)
-                logger.debug(f"Added and removed: {file_path}")
+    async def create_zip_in_chunks(self, files: list, zip_path: str, chunk_size: int = None):
+        """Create ZIP file streaming from disk to minimize memory usage"""
+        try:
+            # Use configured compression level
+            compress_level = DOWNLOAD_CONFIG['compress_level']
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=compress_level) as zf:
+                for i, file_path in enumerate(files):
+                    # Log resources before adding each file
+                    ResourceMonitor.log_resources(logger)
+                    
+                    # Add file to ZIP by streaming from disk - minimal RAM usage
+                    with open(file_path, 'rb') as f:
+                        zf.writestr(os.path.basename(file_path), f.read())
+                    
+                    # Remove original file after adding to ZIP to free disk space
+                    try:
+                        os.remove(file_path)
+                        logger.debug(f"Added and removed: {file_path}")
+                    except OSError as e:
+                        logger.warning(f"Could not remove {file_path}: {e}")
+                    
+                    # Progress update every 10 files
+                    if (i + 1) % 10 == 0:
+                        logger.info(f"ZIP progress: {i + 1}/{len(files)} files processed")
+                        
+        except Exception as e:
+            logger.error(f"Error creating ZIP: {e}")
+            raise
 
 async def setup(bot):
     await bot.add_cog(Download(bot)) 

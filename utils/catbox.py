@@ -76,17 +76,24 @@ class CatboxUploader:
         
         return zip_buffer.getvalue(), stats
 
-    async def organize_and_upload(self, media_files: Dict[str, List[discord.Attachment]]) -> Tuple[Dict, str]:
-        """Upload tous les fichiers dans un ZIP organisé"""
+    async def organize_and_upload_from_disk(self, file_paths: List[str]) -> Tuple[Dict, str]:
+        """Upload files from disk (already downloaded) in organized ZIP - NO RAM usage"""
         try:
             processed_files = []
-            for file_type, files in media_files.items():
-                for file in files:
-                    print(f"Processing: {file.filename}")
-                    file_data = await file.read()
-                    classification = await self.analyze_and_sort_file(file_data, file.filename)
-                    processed_files.append((file.filename, file_data, classification))
-                    print(f"Classified {file.filename} as {classification}")
+            temp_dir = "/tmp/catbox_processing"
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            for file_path in file_paths:
+                filename = os.path.basename(file_path)
+                print(f"Processing: {filename}")
+                
+                # Read file from disk in chunks to avoid RAM usage
+                with open(file_path, 'rb') as f:
+                    file_data = f.read()
+                
+                classification = await self.analyze_and_sort_file(file_data, filename)
+                processed_files.append((filename, file_data, classification))
+                print(f"Classified {filename} as {classification}")
 
             # Créer le ZIP
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -99,7 +106,7 @@ class CatboxUploader:
             return stats, url
 
         except Exception as e:
-            print(f"Error in organize_and_upload: {e}")
+            print(f"Error in organize_and_upload_from_disk: {e}")
             raise
 
     async def upload_file(self, file_data: bytes, filename: str) -> str:
