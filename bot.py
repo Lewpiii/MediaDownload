@@ -11,6 +11,7 @@ from pathlib import Path
 from utils.logging import Logger
 from utils.catbox import CatboxUploader
 from utils.performance import performance_optimizer
+from utils.topgg_checker import TopGGChecker
 import logging
 import sys
 
@@ -96,6 +97,10 @@ class MediaDownloadBot(commands.Bot):
         """Initial bot configuration"""
         try:
             logging.info("Starting setup hook...")
+            
+            # Initialize Top.gg checker
+            self.topgg_checker = TopGGChecker(self)
+            logging.info("Top.gg checker initialized")
             
             # Apply performance optimizations
             await performance_optimizer.optimize_system()

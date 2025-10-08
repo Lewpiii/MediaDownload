@@ -11,6 +11,7 @@ import asyncio
 from utils.catbox import CatboxUploader
 from utils.smart_classifier import smart_classifier
 from utils.interactive_menu import InteractiveDownloadMenu
+from utils.topgg_checker import require_vote
 import psutil
 import os.path
 import time
@@ -127,6 +128,7 @@ class Download(commands.Cog):
         name="download",
         description="Open interactive download menu with smart file organization"
     )
+    @require_vote()
     async def download_media(self, interaction: discord.Interaction):
         """
         Open interactive download menu for media files.
