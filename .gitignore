@@ -58,3 +58,24 @@ cache/
 # Downloaded files
 downloads/
 media/
+
+# Large model directories (should not be in git)
+model_cache/
+ultralytics_yolov5_master/
+
+# Debug and test files
+debug_classification.py
+deep_debug.py
+test_classification.py
+test_optimization.py
+test_topgg.py
+
+# Cache directories
+cache/
+
+# Large files
+yolov5s.pt
+resnet18.pth
+
+# Documentation that's not needed for the main project
+OPTIMIZATION_SUMMARY.md

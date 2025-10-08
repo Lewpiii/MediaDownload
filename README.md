@@ -1,87 +1,179 @@
-# Media Download: The Ultimate Tool for Archiving Your Discord Media 🚀
+# 🤖 Media Download Bot
 
-**Optimized Discord bot for downloading media files from channels with SSD-first architecture and advanced performance optimizations.**
+A powerful Discord bot for downloading and organizing media files from channels with smart categorization and Top.gg vote verification.
 
-Looking for a seamless way to save and archive all your Discord media? **Media Download** is here to simplify the process, ensuring your favorite media files are always at your fingertips. Here's a breakdown of the bot's powerful features and commands:
+## ✨ Features
 
-## 🔧 Performance Optimizations
+- 🎯 **Interactive Download Menu** - User-friendly button-based interface
+- 🧠 **Smart File Organization** - Automatic categorization by content type
+- 🗳️ **Top.gg Vote System** - Encourages community support
+- 📊 **Progress Tracking** - Real-time download progress with visual indicators
+- 🔄 **Resource Monitoring** - Automatic pausing when system resources are low
+- 📁 **Multiple Download Options** - By date, type, or recent messages
+- ☁️ **External Hosting** - Large files automatically uploaded to Catbox
+- 🎨 **Beautiful Embeds** - Professional Discord embeds with progress bars
 
-### Memory Management
-- ✅ **SSD-First Downloads**: All downloads stream directly to SSD storage, avoiding RAM usage
-- ✅ **Streaming Architecture**: Chunked file processing with no RAM buffering
-- ✅ **Resource Monitoring**: Automatic pausing when memory/disk usage is high
-- ✅ **Smart Cleanup**: Automatic cleanup of temporary files
+## 🚀 Quick Start
 
-### Advanced Features
-- ✅ **Concurrent Downloads**: Multi-threaded downloads with configurable limits
-- ✅ **Intelligent Compression**: Optimized ZIP creation with minimal memory footprint
-- ✅ **AI-Powered Organization**: Smart categorization of downloaded media
-- ✅ **Process Optimization**: High-priority process execution for better performance
+### Prerequisites
+- Python 3.8+
+- Discord Bot Token
+- Top.gg API Token (optional)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/media-download-bot.git
+   cd media-download-bot
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp env.example .env
+   # Edit .env with your tokens
+   ```
+
+4. **Run the bot**
+   ```bash
+   python bot.py
+   ```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DISCORD_TOKEN` | Discord Bot Token | ✅ Yes |
+| `TOP_GG_TOKEN` | Top.gg API Token | ❌ No |
+| `LOGS_CHANNEL_ID` | Logs Channel ID | ❌ No |
+| `WEBHOOK_URL` | Webhook URL | ❌ No |
+| `GOFILE_TOKEN` | GoFile Token | ❌ No |
+
+### Getting Your Tokens
+
+#### Discord Bot Token
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create a new application
+3. Go to "Bot" section
+4. Copy the token
+
+#### Top.gg API Token
+1. Go to [Top.gg](https://top.gg/bot/YOUR_BOT_ID)
+2. Click "Edit Bot"
+3. Go to "Webhooks" section
+4. Copy your Authorization token
+
+## 🎮 Usage
+
+### Commands
+
+- `/download` - Open interactive download menu
+
+### Download Options
+
+- **📥 Download All** - Download all media from the channel
+- **📅 By Date** - Download media from specific date ranges
+- **🎨 By Type** - Download only images or videos
+- **🔄 Recent** - Download from last X messages
+
+### Vote System
+
+Users must vote on Top.gg to access download features:
+- Vote is valid for 12 hours
+- Automatic verification after voting
+- Seamless download experience
+
+## 🏗️ Project Structure
+
+```
+media-download-bot/
+├── bot.py                 # Main bot file
+├── config.py              # Configuration settings
+├── cogs/                  # Bot commands
+│   ├── download.py        # Download functionality
+│   ├── help.py           # Help command
+│   └── stats.py          # Statistics
+├── utils/                 # Utility modules
+│   ├── interactive_menu.py # Interactive menus
+│   ├── topgg_checker.py   # Vote verification
+│   ├── smart_classifier.py # File organization
+│   └── catbox.py         # External hosting
+├── requirements.txt       # Dependencies
+├── env.example           # Environment template
+└── README.md             # This file
+```
+
+## 🔧 Development
+
+### Setting up Development Environment
+
+1. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. **Install development dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure local environment**
+   ```bash
+   cp env.example .env
+   # Add your tokens to .env
+   ```
+
+### Testing
+
+```bash
+# Check environment variables
+python check_env.py
+
+# Test Top.gg API connection
+python test_topgg.py
+```
+
+## 📚 Documentation
+
+- [Environment Setup Guide](ENV_SETUP.md) - Complete environment configuration
+- [GitHub Setup Guide](GITHUB_SETUP.md) - Quick GitHub Secrets setup
+- [Top.gg Integration](TOPGG_SETUP.md) - Vote system documentation
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+If you encounter any issues:
+
+1. Check the [documentation](ENV_SETUP.md)
+2. Verify your environment variables
+3. Check the bot logs
+4. Open an issue on GitHub
+
+## 🙏 Acknowledgments
+
+- [Discord.py](https://github.com/Rapptz/discord.py) - Discord API wrapper
+- [Top.gg](https://top.gg) - Bot listing and voting platform
+- [Catbox](https://catbox.moe) - File hosting service
 
 ---
 
-## 🚀 Features
-
-### 1. **`/download` - The Core Command**
-This is the heart of the bot and your go-to for media archiving!  
-With **`/download`**, you can effortlessly extract and download all media files from a Discord channel. Whether it’s images, videos, or other shared files, this command is ideal for:
-
-- **Preserving memories**
-- **Backing up content**
-- **Safeguarding files in case of channel or server loss**
-
-#### Example Use Case:
-Your server is about to shut down, and you don’t want to lose years of shared memes, photos, or videos.  
-With just **`/download`**, you can archive everything in a few clicks!
-
----
-
-### 2. **`/help` - Your Personal Guide**
-New to the bot? No worries!  
-Use **`/help`** to get a detailed guide on how to use **Media Download**. It’s designed to provide simple, step-by-step instructions for mastering the bot’s functionality.
-
-#### Example Use Case:
-A friend on your server wants to back up a channel’s media but doesn’t know how to begin. By typing **`/help`**, they can quickly get up to speed!
-
----
-
-### 3. **`/stats` - See the Bot in Action**
-Want to check how the bot has been performing?  
-With **`/stats`**, you can view detailed insights into **Media Download’s** activity. Perfect for:
-
-- Tracking the **total files downloaded**
-- Seeing **recent activity**
-- Monitoring **media retrieval metrics**
-
-#### Example Use Case:
-Admins curious about the bot’s contributions can type **`/stats`** to see metrics like total files downloaded or recent activity.
-
----
-
-## 💡 Why Choose Media Download?
-
-**Media Download** is perfect for anyone who values their shared media and wants to ensure it’s always accessible. Whether you’re:
-
-- **Preserving precious memories**
-- **Saving important project files**
-- **Organizing server media**
-
-This bot gets the job done quickly and efficiently. With **Media Download**, you’ll never lose important media again.
-
----
-
-## 📜 Legal Information
-
-- [Terms of Service](https://lewpiii.github.io/MediaDownload/TermsOfService.html)
-- [Privacy Policy](https://lewpiii.github.io/MediaDownload/PrivacyPolicy.html)
-
----
-
-## 🌟 Get Started with Media Download
-
-Make your Discord media archiving smarter, faster, and easier!
-
-👉 **[Invite Media Download to Your Server](https://discord.com/oauth2/authorize?client_id=1332684877551763529&permissions=947040413760&integration_type=0&scope=bot+applications.commands)**  
----
-
-Start preserving what matters most with **Media Download** — your ultimate tool for saving and archiving Discord media! 🚀
+**Made with ❤️ for the Discord community**
