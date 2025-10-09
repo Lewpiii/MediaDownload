@@ -209,6 +209,7 @@ class Download(commands.Cog):
                 await interaction.edit_original_response(embed=progress_embed)
 
                 # Process messages and extract attachments
+                failed_downloads = []
                 for msg in channel_messages:
                     if msg.attachments:
                         for attachment in msg.attachments:
@@ -228,25 +229,33 @@ class Download(commands.Cog):
                                     await interaction.edit_original_response(embed=progress_embed)
                                     await asyncio.sleep(30)
                                 
-                                # Download directly to SSD - NO RAM usage
-                                if await self.download_file_in_chunks(attachment.url, file_path):
+                                # Download with retry logic
+                                download_success = await self.download_file_in_chunks(attachment.url, file_path)
+                                if download_success:
                                     downloaded_files.append(file_path)
                                     size = os.path.getsize(file_path)
                                     total_size += size
                                     logger.debug(f"Downloaded {attachment.filename} ({size/1024/1024:.1f}MB)")
+                                else:
+                                    failed_downloads.append(attachment.filename)
+                                    logger.warning(f"Failed to download {attachment.filename}")
+                                
+                                # Update progress every 3 files (more frequent updates)
+                                if len(downloaded_files) % 3 == 0:
+                                    progress_percent = (len(downloaded_files) / max(1, total_messages)) * 100
+                                    progress_bar = self._create_progress_bar(progress_percent)
                                     
-                                    # Update progress every 5 files
-                                    if len(downloaded_files) % 5 == 0:
-                                        progress_percent = (len(downloaded_files) / max(1, total_messages)) * 100
-                                        progress_bar = self._create_progress_bar(progress_percent)
-                                        
-                                        progress_embed.set_field_at(
-                                            1,
-                                            name="📊 Progress",
-                                            value=f"{progress_bar}\n**Files downloaded**: {len(downloaded_files)}\n**Total size**: {total_size/1024/1024:.1f}MB",
-                                            inline=False
-                                        )
-                                        await interaction.edit_original_response(embed=progress_embed)
+                                    status_text = f"{progress_bar}\n**Files downloaded**: {len(downloaded_files)}\n**Total size**: {total_size/1024/1024:.1f}MB"
+                                    if failed_downloads:
+                                        status_text += f"\n**Failed**: {len(failed_downloads)} files"
+                                    
+                                    progress_embed.set_field_at(
+                                        1,
+                                        name="📊 Progress",
+                                        value=status_text,
+                                        inline=False
+                                    )
+                                    await interaction.edit_original_response(embed=progress_embed)
                 
                 if not downloaded_files:
                     progress_embed.title = "❌ No Media Found"
@@ -416,46 +425,86 @@ class Download(commands.Cog):
         bar = "█" * filled + "░" * (length - filled)
         return f"{bar} {percent:.1f}%"
     
-    async def download_file_in_chunks(self, url: str, file_path: str, chunk_size: int = None):
-        """Download a file in chunks and save directly to disk (SSD) - NO RAM usage"""
+    async def download_file_in_chunks(self, url: str, file_path: str, chunk_size: int = None, max_retries: int = 3):
+        """Download a file in chunks with timeout handling and retry logic"""
         try:
-            # Use configured chunk size
+            # Use smaller chunk size for better reliability
             if chunk_size is None:
-                chunk_size = DOWNLOAD_CONFIG['chunk_size']
+                chunk_size = 2 * 1024 * 1024  # 2MB chunks instead of 8MB
                 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        total_size = int(response.headers.get('content-length', 0))
-                        
-                        # Check file size limit
-                        if total_size > MAX_SINGLE_FILE_SIZE:
-                            logger.warning(f"File too large: {total_size} bytes (max: {MAX_SINGLE_FILE_SIZE})")
-                            return False
-                            
-                        downloaded = 0
-                        
-                        # Ensure directory exists
-                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                        
-                        # Stream directly to disk - NO RAM buffering
-                        with open(file_path, 'wb') as f:
-                            async for chunk in response.content.iter_chunked(chunk_size):
-                                f.write(chunk)
-                                f.flush()  # Force write to disk immediately
-                                downloaded += len(chunk)
+            # Timeout configuration
+            timeout = aiohttp.ClientTimeout(
+                total=300,  # 5 minutes total timeout
+                connect=30,  # 30 seconds to connect
+                sock_read=60  # 60 seconds between reads
+            )
+            
+            for attempt in range(max_retries):
+                try:
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.get(url) as response:
+                            if response.status == 200:
+                                total_size = int(response.headers.get('content-length', 0))
                                 
-                                # Log progress every 10MB
-                                if downloaded % (10 * 1024 * 1024) == 0:
-                                    logger.debug(f"Downloaded: {downloaded}/{total_size} bytes ({(downloaded/total_size)*100:.1f}%)")
-                        
-                        logger.debug(f"Successfully downloaded {file_path} ({downloaded} bytes)")
-                        return True
+                                # Check file size limit
+                                if total_size > MAX_SINGLE_FILE_SIZE:
+                                    logger.warning(f"File too large: {total_size} bytes (max: {MAX_SINGLE_FILE_SIZE})")
+                                    return False
+                                    
+                                downloaded = 0
+                                
+                                # Ensure directory exists
+                                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                                
+                                # Stream directly to disk with progress monitoring
+                                with open(file_path, 'wb') as f:
+                                    last_progress_time = time.time()
+                                    
+                                    async for chunk in response.content.iter_chunked(chunk_size):
+                                        f.write(chunk)
+                                        f.flush()  # Force write to disk immediately
+                                        downloaded += len(chunk)
+                                        
+                                        # Check for timeout every chunk
+                                        current_time = time.time()
+                                        if current_time - last_progress_time > 120:  # 2 minutes without progress
+                                            logger.warning(f"Download timeout detected for {url}")
+                                            raise aiohttp.ClientTimeout("Download timeout - no progress for 2 minutes")
+                                        
+                                        last_progress_time = current_time
+                                        
+                                        # Log progress every 5MB
+                                        if downloaded % (5 * 1024 * 1024) == 0:
+                                            logger.debug(f"Downloaded: {downloaded}/{total_size} bytes ({(downloaded/total_size)*100:.1f}%)")
+                                
+                                logger.debug(f"Successfully downloaded {file_path} ({downloaded} bytes)")
+                                return True
+                            else:
+                                logger.error(f"Failed to download {url}: HTTP {response.status}")
+                                if attempt < max_retries - 1:
+                                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                                    continue
+                                return False
+                                
+                except (aiohttp.ClientTimeout, asyncio.TimeoutError) as e:
+                    logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries} for {url}: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        continue
                     else:
-                        logger.error(f"Failed to download {url}: HTTP {response.status}")
+                        logger.error(f"All retry attempts failed for {url}")
                         return False
+                        
+                except Exception as e:
+                    logger.error(f"Error on attempt {attempt + 1}/{max_retries} downloading {url}: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    else:
+                        return False
+                        
         except Exception as e:
-            logger.error(f"Error downloading {url}: {e}")
+            logger.error(f"Critical error downloading {url}: {e}")
             return False
 
     async def create_zip_in_chunks(self, files: list, zip_path: str, chunk_size: int = None):
@@ -486,6 +535,85 @@ class Download(commands.Cog):
         except Exception as e:
             logger.error(f"Error creating ZIP: {e}")
             raise
+
+    @app_commands.command(
+        name="recover-download",
+        description="Recover a stuck download by checking for partial files"
+    )
+    async def recover_download(self, interaction: discord.Interaction):
+        """Recover stuck downloads by checking for partial files"""
+        try:
+            await interaction.response.defer(thinking=True)
+            
+            temp_dir = DOWNLOAD_CONFIG['temp_dir']
+            if not os.path.exists(temp_dir):
+                await interaction.followup.send("❌ No download directory found. No downloads to recover.")
+                return
+            
+            # Find partial files
+            partial_files = []
+            for filename in os.listdir(temp_dir):
+                file_path = os.path.join(temp_dir, filename)
+                if os.path.isfile(file_path) and not filename.endswith('.zip'):
+                    file_size = os.path.getsize(file_path)
+                    partial_files.append({
+                        'name': filename,
+                        'size': file_size,
+                        'path': file_path
+                    })
+            
+            if not partial_files:
+                await interaction.followup.send("✅ No partial downloads found. All downloads are clean.")
+                return
+            
+            # Create recovery embed
+            embed = discord.Embed(
+                title="🔧 Download Recovery",
+                description=f"Found {len(partial_files)} partial files",
+                color=0xFFA500,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Show partial files
+            files_text = ""
+            total_size = 0
+            for file_info in partial_files[:10]:  # Show first 10
+                size_mb = file_info['size'] / (1024 * 1024)
+                total_size += file_info['size']
+                files_text += f"• {file_info['name']} ({size_mb:.1f}MB)\n"
+            
+            if len(partial_files) > 10:
+                files_text += f"... and {len(partial_files) - 10} more files\n"
+            
+            embed.add_field(
+                name="📁 Partial Files Found",
+                value=files_text or "No files found",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="📊 Summary",
+                value=f"**Total files**: {len(partial_files)}\n**Total size**: {total_size / (1024*1024):.1f}MB",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🔧 Recovery Options",
+                value=(
+                    "• **Clean**: Remove all partial files\n"
+                    "• **Resume**: Try to complete partial downloads\n"
+                    "• **Archive**: Create ZIP from partial files"
+                ),
+                inline=False
+            )
+            
+            # Create recovery view
+            view = RecoveryView(partial_files)
+            await interaction.followup.send(embed=embed, view=view)
+            
+        except Exception as e:
+            logger.error(f"Error in recover_download: {e}")
+            await interaction.followup.send("❌ Error during recovery process.")
 
     @app_commands.command(
         name="test-classification",
@@ -554,6 +682,127 @@ class Download(commands.Cog):
         except Exception as e:
             logger.error(f"Error in test_classification: {e}")
             await interaction.followup.send("❌ Error testing classification system.")
+
+class RecoveryView(discord.ui.View):
+    """Recovery options for stuck downloads"""
+    
+    def __init__(self, partial_files):
+        super().__init__(timeout=300)
+        self.partial_files = partial_files
+    
+    @discord.ui.button(label="🧹 Clean All", style=discord.ButtonStyle.danger)
+    async def clean_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Remove all partial files"""
+        try:
+            cleaned_count = 0
+            total_size = 0
+            
+            for file_info in self.partial_files:
+                try:
+                    file_size = os.path.getsize(file_info['path'])
+                    os.remove(file_info['path'])
+                    cleaned_count += 1
+                    total_size += file_size
+                except OSError:
+                    pass
+            
+            embed = discord.Embed(
+                title="🧹 Cleanup Complete",
+                description=f"Removed {cleaned_count} partial files",
+                color=0x00FF00
+            )
+            embed.add_field(
+                name="📊 Cleanup Summary",
+                value=f"**Files removed**: {cleaned_count}\n**Space freed**: {total_size / (1024*1024):.1f}MB",
+                inline=False
+            )
+            
+            await interaction.response.edit_message(embed=embed, view=None)
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error during cleanup: {e}", ephemeral=True)
+    
+    @discord.ui.button(label="📦 Archive Partial", style=discord.ButtonStyle.secondary)
+    async def archive_partial(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Create ZIP from partial files"""
+        try:
+            await interaction.response.defer(thinking=True)
+            
+            temp_dir = DOWNLOAD_CONFIG['temp_dir']
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            zip_name = f"partial_recovery_{timestamp}.zip"
+            zip_path = os.path.join(temp_dir, zip_name)
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for file_info in self.partial_files:
+                    try:
+                        zip_file.write(file_info['path'], file_info['name'])
+                    except OSError:
+                        pass
+            
+            file_size = os.path.getsize(zip_path)
+            
+            embed = discord.Embed(
+                title="📦 Archive Created",
+                description=f"Created ZIP from {len(self.partial_files)} partial files",
+                color=0x00FF00
+            )
+            embed.add_field(
+                name="📊 Archive Info",
+                value=f"**Files archived**: {len(self.partial_files)}\n**Archive size**: {file_size / (1024*1024):.1f}MB",
+                inline=False
+            )
+            
+            if file_size > MAX_DIRECT_DOWNLOAD_SIZE:
+                embed.add_field(
+                    name="⚠️ Note",
+                    value="File too large for Discord. Uploading to external hosting...",
+                    inline=False
+                )
+                await interaction.followup.send(embed=embed)
+                
+                # Upload to Catbox
+                try:
+                    uploader = CatboxUploader()
+                    with open(zip_path, 'rb') as f:
+                        file_data = f.read()
+                    url = await uploader.upload_file(filename=zip_name, file_data=file_data)
+                    
+                    embed.add_field(
+                        name="📥 Download Link",
+                        value=f"[Click here to download]({url})",
+                        inline=False
+                    )
+                    await interaction.edit_original_response(embed=embed)
+                except Exception as e:
+                    await interaction.edit_original_response(
+                        embed=discord.Embed(
+                            title="❌ Upload Failed",
+                            description=f"Could not upload to external hosting: {e}",
+                            color=0xFF0000
+                        )
+                    )
+            else:
+                await interaction.followup.send(embed=embed, file=discord.File(zip_path))
+            
+            # Cleanup
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+                
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error creating archive: {e}")
+    
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Cancel recovery"""
+        embed = discord.Embed(
+            title="❌ Recovery Cancelled",
+            description="No action taken on partial files.",
+            color=0xFF0000
+        )
+        await interaction.response.edit_message(embed=embed, view=None)
 
 async def setup(bot):
     await bot.add_cog(Download(bot)) 

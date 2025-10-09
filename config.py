@@ -31,10 +31,15 @@ MAX_TOTAL_DOWNLOAD_SIZE = 500 * 1024 * 1024  # 500MB max total
 # Configuration des téléchargements (SSD optimisé)
 DOWNLOAD_CONFIG = {
     'temp_dir': '/tmp/discord_downloads',  # Dossier temporaire sur SSD
-    'chunk_size': 8 * 1024 * 1024,        # 8MB chunks pour streaming
-    'max_concurrent_downloads': 3,          # Limite les téléchargements simultanés
+    'chunk_size': 2 * 1024 * 1024,        # 2MB chunks pour meilleure fiabilité
+    'max_concurrent_downloads': 2,          # Limite les téléchargements simultanés
     'cleanup_after_zip': True,              # Supprime les fichiers après ZIP
-    'compress_level': 6                     # Niveau de compression ZIP (1-9)
+    'compress_level': 6,                    # Niveau de compression ZIP (1-9)
+    'max_retries': 3,                      # Nombre de tentatives en cas d'échec
+    'timeout_total': 300,                  # Timeout total (5 minutes)
+    'timeout_connect': 30,                 # Timeout de connexion (30 secondes)
+    'timeout_read': 60,                    # Timeout de lecture (60 secondes)
+    'progress_update_interval': 3          # Mise à jour du progrès toutes les N fichiers
 }
 
 # Configuration des ressources
