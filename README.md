@@ -56,6 +56,12 @@ A powerful Discord bot for downloading and organizing media files from channels 
 | `WEBHOOK_URL` | Webhook URL | ❌ No |
 | `GOFILE_TOKEN` | GoFile Token | ❌ No |
 
+### Intents & Permissions
+
+- Works without Messages Intent. The bot scans channel history via API and extracts media from attachments and embeds.
+- Optional: set `ENABLE_MESSAGE_CONTENT=true` if you want to parse plain-text links from message content (requires enabling Message Content Intent in the Discord Developer Portal).
+- Ensure the bot has channel permissions: View Channel, Read Message History, Attach Files, Embed Links.
+
 ### Getting Your Tokens
 
 #### Discord Bot Token
@@ -102,6 +108,7 @@ media-download-bot/
 │   └── stats.py          # Statistics
 ├── utils/                 # Utility modules
 │   ├── interactive_menu.py # Interactive menus
+│   ├── media_extractor.py  # Attachment+embed media extraction (no message content needed)
 │   ├── topgg_checker.py   # Vote verification
 │   ├── smart_classifier.py # File organization
 │   └── catbox.py         # External hosting
