@@ -1,6 +1,8 @@
 import os
 import re
 from typing import List, Tuple
+import mimetypes
+import os as _os
 from urllib.parse import urlparse
 
 
@@ -36,11 +38,34 @@ class MediaExtractor:
         """
         results: List[Tuple[str, str]] = []
 
+        # Config: relaxed mode to accept broader attachments during diagnosis
+        relaxed = _os.getenv('RELAXED_ATTACHMENT_FILTER', 'false').lower() in ('1', 'true', 'yes')
+
         # 1) Native attachments
         for attachment in getattr(msg, 'attachments', []) or []:
             filename = getattr(attachment, 'filename', '') or f"attachment_{len(results)}"
             file_ext = os.path.splitext(filename)[1].lower()
-            if file_ext in allowed_exts and getattr(attachment, 'url', None):
+            content_type = getattr(attachment, 'content_type', None)
+
+            is_allowed_by_ext = file_ext in allowed_exts
+            is_allowed_by_mime = False
+            if content_type:
+                major = content_type.split('/')[0]
+                is_allowed_by_mime = major in ("image", "video")
+                # if missing extension, try to infer from mime
+                if not file_ext:
+                    guessed = mimetypes.guess_extension(content_type) or ''
+                    file_ext = guessed.lower()
+                    if filename and not os.path.splitext(filename)[1] and guessed:
+                        filename = f"{filename}{guessed}"
+
+            if relaxed and getattr(attachment, 'url', None):
+                # In relaxed mode, accept any attachment with either image/video mime OR any filename extension
+                if is_allowed_by_mime or bool(os.path.splitext(filename)[1]):
+                    results.append((attachment.url, filename))
+                    continue
+
+            if (is_allowed_by_ext or is_allowed_by_mime) and getattr(attachment, 'url', None):
                 results.append((attachment.url, filename))
 
         # 2) Embeds (image/thumbnail/video/url)
@@ -51,18 +76,30 @@ class MediaExtractor:
 
             # Image
             image = getattr(emb, 'image', None)
-            if image and getattr(image, 'url', None) and cls._url_has_allowed_ext(image.url, allowed_exts):
-                results.append((image.url, os.path.basename(urlparse(image.url).path) or f"image_{len(results)}"))
+            if image:
+                candidate_urls = [getattr(image, 'url', None), getattr(image, 'proxy_url', None)]
+                for u in candidate_urls:
+                    if u and cls._url_has_allowed_ext(u, allowed_exts):
+                        results.append((u, os.path.basename(urlparse(u).path) or f"image_{len(results)}"))
+                        break
 
             # Thumbnail
             thumb = getattr(emb, 'thumbnail', None)
-            if thumb and getattr(thumb, 'url', None) and cls._url_has_allowed_ext(thumb.url, allowed_exts):
-                results.append((thumb.url, os.path.basename(urlparse(thumb.url).path) or f"thumb_{len(results)}"))
+            if thumb:
+                candidate_urls = [getattr(thumb, 'url', None), getattr(thumb, 'proxy_url', None)]
+                for u in candidate_urls:
+                    if u and cls._url_has_allowed_ext(u, allowed_exts):
+                        results.append((u, os.path.basename(urlparse(u).path) or f"thumb_{len(results)}"))
+                        break
 
             # Video
             video = getattr(emb, 'video', None)
-            if video and getattr(video, 'url', None) and cls._url_has_allowed_ext(video.url, allowed_exts):
-                results.append((video.url, os.path.basename(urlparse(video.url).path) or f"video_{len(results)}"))
+            if video:
+                candidate_urls = [getattr(video, 'url', None), getattr(video, 'proxy_url', None)]
+                for u in candidate_urls:
+                    if u and cls._url_has_allowed_ext(u, allowed_exts):
+                        results.append((u, os.path.basename(urlparse(u).path) or f"video_{len(results)}"))
+                        break
 
         # 3) Optional: plain-text links (only if caller opts-in)
         if include_text_links:

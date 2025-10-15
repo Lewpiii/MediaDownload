@@ -218,6 +218,7 @@ class Download(commands.Cog):
                         allowed_exts=allowed_exts,
                         include_text_links=False  # keep false to avoid needing message content intent
                     )
+                    logger.debug(f"Message {msg.id}: found {len(media_list)} media candidates")
 
                     for url, suggested_name in media_list:
                         file_ext = os.path.splitext(suggested_name)[1].lower()
