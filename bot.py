@@ -52,10 +52,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'  # Format simplifié
 )
 
-# Définir les intents (activer les messages pour l'historique et les pièces jointes)
+# Intents minimaux: pas besoin de messages intent pour lire l'historique et les pièces jointes via API
 intents = discord.Intents.default()
 intents.guilds = True
-intents.messages = True  # nécessaire pour lire l'historique et voir les pièces jointes
 
 # Optionnel: autoriser le contenu des messages via variable d'environnement (privileged intent)
 try:
@@ -77,7 +76,6 @@ class MediaDownloadBot(commands.Bot):
         
         intents = discord.Intents.default()
         intents.guilds = True
-        intents.messages = True  # nécessaire pour fetch l'historique
 
         # Optionnel: activer message_content si explicitement demandé
         try:

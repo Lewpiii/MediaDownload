@@ -18,6 +18,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 from config import DOWNLOAD_CONFIG, RESOURCE_LIMITS, MAX_DIRECT_DOWNLOAD_SIZE, MAX_SINGLE_FILE_SIZE, MAX_TOTAL_DOWNLOAD_SIZE
+from utils.media_extractor import MediaExtractor
 
 # Configuration
 logger = logging.getLogger('bot.download')
@@ -208,54 +209,57 @@ class Download(commands.Cog):
                 )
                 await interaction.edit_original_response(embed=progress_embed)
 
-                # Process messages and extract attachments
+                # Process messages: attachments + embeds (no message content needed)
                 failed_downloads = []
                 for msg in channel_messages:
-                    if msg.attachments:
-                        for attachment in msg.attachments:
-                            file_ext = os.path.splitext(attachment.filename)[1].lower()
-                            if file_ext in self.media_types[media_type]:
-                                file_path = os.path.join(temp_dir, f"{len(downloaded_files)}_{attachment.filename}")
-                                
-                                # Check if we should pause due to resource usage
-                                should_pause, reason = monitor.should_pause()
-                                if should_pause:
-                                    progress_embed.set_field_at(
-                                        1,
-                                        name="📊 Status",
-                                        value=f"⏸️ Paused: {reason}\nWaiting 30 seconds...",
-                                        inline=False
-                                    )
-                                    await interaction.edit_original_response(embed=progress_embed)
-                                    await asyncio.sleep(30)
-                                
-                                # Download with retry logic
-                                download_success = await self.download_file_in_chunks(attachment.url, file_path)
-                                if download_success:
-                                    downloaded_files.append(file_path)
-                                    size = os.path.getsize(file_path)
-                                    total_size += size
-                                    logger.debug(f"Downloaded {attachment.filename} ({size/1024/1024:.1f}MB)")
-                                else:
-                                    failed_downloads.append(attachment.filename)
-                                    logger.warning(f"Failed to download {attachment.filename}")
-                                
-                                # Update progress every 3 files (more frequent updates)
-                                if len(downloaded_files) % 3 == 0:
-                                    progress_percent = (len(downloaded_files) / max(1, total_messages)) * 100
-                                    progress_bar = self._create_progress_bar(progress_percent)
-                                    
-                                    status_text = f"{progress_bar}\n**Files downloaded**: {len(downloaded_files)}\n**Total size**: {total_size/1024/1024:.1f}MB"
-                                    if failed_downloads:
-                                        status_text += f"\n**Failed**: {len(failed_downloads)} files"
-                                    
-                                    progress_embed.set_field_at(
-                                        1,
-                                        name="📊 Progress",
-                                        value=status_text,
-                                        inline=False
-                                    )
-                                    await interaction.edit_original_response(embed=progress_embed)
+                    allowed_exts = self.media_types[media_type]
+                    media_list = MediaExtractor.extract(
+                        msg,
+                        allowed_exts=allowed_exts,
+                        include_text_links=False  # keep false to avoid needing message content intent
+                    )
+
+                    for url, suggested_name in media_list:
+                        file_ext = os.path.splitext(suggested_name)[1].lower()
+                        if file_ext not in allowed_exts:
+                            continue
+
+                        file_path = os.path.join(temp_dir, f"{len(downloaded_files)}_{suggested_name}")
+
+                        # Resource pause if necessary
+                        should_pause, reason = monitor.should_pause()
+                        if should_pause:
+                            progress_embed.set_field_at(
+                                1,
+                                name="📊 Status",
+                                value=f"⏸️ Paused: {reason}\nWaiting 30 seconds...",
+                                inline=False
+                            )
+                            await interaction.edit_original_response(embed=progress_embed)
+                            await asyncio.sleep(30)
+
+                        # Download with retry logic
+                        if await self.download_file_in_chunks(url, file_path):
+                            downloaded_files.append(file_path)
+                            size = os.path.getsize(file_path)
+                            total_size += size
+                            logger.debug(f"Downloaded {suggested_name} ({size/1024/1024:.1f}MB)")
+                        else:
+                            failed_downloads.append(suggested_name)
+                            logger.warning(f"Failed to download {suggested_name}")
+
+                        # Update progress every 3 files
+                        if len(downloaded_files) % 3 == 0:
+                            progress_percent = (len(downloaded_files) / max(1, total_messages)) * 100
+                            progress_bar = self._create_progress_bar(progress_percent)
+                            status_text = (
+                                f"{progress_bar}\n**Files downloaded**: {len(downloaded_files)}\n"
+                                f"**Total size**: {total_size/1024/1024:.1f}MB"
+                            )
+                            if failed_downloads:
+                                status_text += f"\n**Failed**: {len(failed_downloads)} files"
+                            progress_embed.set_field_at(1, name="📊 Progress", value=status_text, inline=False)
+                            await interaction.edit_original_response(embed=progress_embed)
                 
                 if not downloaded_files:
                     progress_embed.title = "❌ No Media Found"
