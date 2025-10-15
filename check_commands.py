@@ -20,8 +20,8 @@ async def check_commands():
     
     # Créer un bot de test
     intents = discord.Intents.default()
-    intents.message_content = True
     intents.guilds = True
+    # Note: message_content retiré car non nécessaire pour les slash commands
     
     bot = commands.Bot(
         command_prefix=commands.when_mentioned,
@@ -37,9 +37,9 @@ async def check_commands():
         # Charger le cog download
         try:
             await bot.load_extension('cogs.download')
-            print("✅ Cog download chargé")
+            print("OK: Cog download charge")
         except Exception as e:
-            print(f"❌ Erreur chargement cog download: {e}")
+            print(f"ERREUR chargement cog download: {e}")
             print("   Détails de l'erreur:")
             import traceback
             traceback.print_exc()
@@ -48,7 +48,7 @@ async def check_commands():
         # Synchroniser les commandes
         try:
             synced = await bot.tree.sync()
-            print(f"✅ {len(synced)} commandes synchronisées")
+            print(f"OK: {len(synced)} commandes synchronisees")
             
             # Lister les commandes
             print()
@@ -58,10 +58,10 @@ async def check_commands():
                 print(f"  - /{cmd.name}: {cmd.description}")
             
             if not commands:
-                print("  ⚠️  Aucune commande trouvée")
+                print("  ATTENTION: Aucune commande trouvee")
             
         except Exception as e:
-            print(f"❌ Erreur synchronisation: {e}")
+            print(f"ERREUR synchronisation: {e}")
         
         # Fermer le bot
         await bot.close()
@@ -69,14 +69,14 @@ async def check_commands():
     # Démarrer le bot
     token = os.getenv('DISCORD_TOKEN')
     if not token:
-        print("❌ Token Discord non trouvé")
-        print("💡 Vérifiez votre fichier .env ou vos GitHub Secrets")
+        print("ERREUR: Token Discord non trouve")
+        print("ASTUCE: Verifiez votre fichier .env ou vos GitHub Secrets")
         return
     
     try:
         await bot.start(token)
     except Exception as e:
-        print(f"❌ Erreur démarrage: {e}")
+        print(f"ERREUR demarrage: {e}")
 
 if __name__ == "__main__":
     asyncio.run(check_commands())

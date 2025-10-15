@@ -52,10 +52,10 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'  # Format simplifié
 )
 
-# Définir l'intents
+# Définir l'intents (sans message_content pour éviter la vérification Discord)
 intents = discord.Intents.default()
-intents.message_content = True
 intents.guilds = True
+# Note: message_content retiré car non nécessaire pour les slash commands
 
 logging.info(f"Token trouvé : {'✓' if os.getenv('DISCORD_TOKEN') else '✗'}")
 
@@ -68,8 +68,8 @@ class MediaDownloadBot(commands.Bot):
         print("===================================\n")
         
         intents = discord.Intents.default()
-        intents.message_content = True
         intents.guilds = True
+        # Note: message_content retiré car non nécessaire pour les slash commands
         
         super().__init__(
             command_prefix=commands.when_mentioned,
