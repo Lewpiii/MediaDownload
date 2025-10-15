@@ -18,6 +18,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 from config import DOWNLOAD_CONFIG, RESOURCE_LIMITS, MAX_DIRECT_DOWNLOAD_SIZE, MAX_SINGLE_FILE_SIZE, MAX_TOTAL_DOWNLOAD_SIZE
+import re
 from utils.media_extractor import MediaExtractor
 
 # Configuration
@@ -145,6 +146,89 @@ class Download(commands.Cog):
         except Exception as e:
             logger.error(f"Error in download_media: {e}")
             await interaction.response.send_message("❌ An error occurred while opening the download menu.", ephemeral=True)
+
+    @app_commands.command(
+        name="download_by_link",
+        description="Download media from a specific message URL"
+    )
+    @app_commands.describe(message_url="Discord message URL (right-click > Copy Link)")
+    async def download_by_link(self, interaction: discord.Interaction, message_url: str):
+        """Download attachments/embeds from a specific message URL without message content intent."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            # Parse IDs from URL: https://discord.com/channels/<guild>/<channel>/<message>
+            m = re.search(r"discord\.com/[^/]+/(\d+)/(\d+)/(\d+)", message_url)
+            if not m:
+                await interaction.followup.send("Invalid message URL.")
+                return
+            guild_id, channel_id, message_id = map(int, m.groups())
+
+            # Fetch channel and message
+            channel = interaction.client.get_channel(channel_id)
+            if channel is None:
+                try:
+                    channel = await interaction.client.fetch_channel(channel_id)
+                except Exception:
+                    await interaction.followup.send("Cannot access the channel. Check bot permissions.")
+                    return
+
+            try:
+                message = await channel.fetch_message(message_id)
+            except Exception:
+                await interaction.followup.send("Cannot fetch the message. The bot might not see this channel/thread.")
+                return
+
+            # Extract media from this message
+            allowed_exts = self.media_types['all']
+            media_list = MediaExtractor.extract(message, allowed_exts=allowed_exts)
+            if not media_list:
+                await interaction.followup.send("No media found in that message (no attachments or supported embeds).")
+                return
+
+            temp_dir = DOWNLOAD_CONFIG['temp_dir']
+            os.makedirs(temp_dir, exist_ok=True)
+            downloaded_files = []
+            total_size = 0
+            for url, name in media_list:
+                file_path = os.path.join(temp_dir, f"single_{len(downloaded_files)}_{name}")
+                if await self.download_file_in_chunks(url, file_path):
+                    downloaded_files.append(file_path)
+                    total_size += os.path.getsize(file_path)
+
+            if not downloaded_files:
+                await interaction.followup.send("Failed to download media from the message.")
+                return
+
+            # If single file and small enough, send directly; else zip
+            if len(downloaded_files) == 1 and total_size <= MAX_DIRECT_DOWNLOAD_SIZE:
+                await interaction.followup.send(file=discord.File(downloaded_files[0]))
+            else:
+                zip_name = f"message_media_{message_id}.zip"
+                zip_path = os.path.join(temp_dir, zip_name)
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=DOWNLOAD_CONFIG['compress_level']) as zf:
+                    for fp in downloaded_files:
+                        zf.write(fp, os.path.basename(fp))
+                if os.path.getsize(zip_path) <= MAX_DIRECT_DOWNLOAD_SIZE:
+                    await interaction.followup.send(file=discord.File(zip_path))
+                else:
+                    uploader = CatboxUploader()
+                    with open(zip_path, 'rb') as f:
+                        data = f.read()
+                    url = await uploader.upload_file(filename=zip_name, file_data=data)
+                    await interaction.followup.send(f"File too large; uploaded to Catbox: {url}")
+
+        finally:
+            # Clean temp files
+            try:
+                for root, _, files in os.walk(DOWNLOAD_CONFIG['temp_dir']):
+                    for fn in files:
+                        if fn.startswith('single_') or fn.startswith('message_media_'):
+                            try:
+                                os.remove(os.path.join(root, fn))
+                            except Exception:
+                                pass
+            except Exception:
+                pass
 
     async def start_interactive_download(self, interaction: discord.Interaction, options: dict):
         """Start download process with interactive options"""
