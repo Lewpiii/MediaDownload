@@ -1,4 +1,82 @@
 import os
+from typing import Iterable, List, Sequence, Tuple
+from urllib.parse import urlparse
+
+import discord
+
+
+class MediaExtractor:
+    """Utility to extract media URLs from a discord.Message without message content intent.
+
+    It scans:
+    - Attachments
+    - Embeds (image, thumbnail, video, main url)
+
+    Optionally, it can parse plain text links if provided externally, but by default we keep
+    include_text_links=False to avoid relying on message content.
+    """
+
+    @staticmethod
+    def _matches_allowed_ext(url: str, allowed_exts: Sequence[str]) -> Tuple[bool, str]:
+        try:
+            path = urlparse(url).path or ""
+            ext = os.path.splitext(path)[1].lower()
+            if ext and ext in allowed_exts:
+                filename = os.path.basename(path) or f"file{ext}"
+                return True, filename
+        except Exception:
+            pass
+        return False, ""
+
+    @staticmethod
+    def extract(
+        message: discord.Message,
+        *,
+        allowed_exts: Sequence[str],
+        include_text_links: bool = False,
+        extra_text_links: Iterable[str] | None = None,
+    ) -> List[Tuple[str, str]]:
+        candidates: List[Tuple[str, str]] = []
+
+        # 1) Attachments
+        try:
+            for att in getattr(message, "attachments", []) or []:
+                ext = os.path.splitext(att.filename)[1].lower()
+                if ext in allowed_exts:
+                    candidates.append((att.url, att.filename))
+        except Exception:
+            pass
+
+        # 2) Embeds (image, thumbnail, video, main link)
+        try:
+            for emb in getattr(message, "embeds", []) or []:
+                urls: List[str] = []
+                if getattr(emb, "url", None):
+                    urls.append(emb.url)
+                if getattr(emb, "thumbnail", None) and getattr(emb.thumbnail, "url", None):
+                    urls.append(emb.thumbnail.url)
+                if getattr(emb, "image", None) and getattr(emb.image, "url", None):
+                    urls.append(emb.image.url)
+                if getattr(emb, "video", None) and getattr(emb.video, "url", None):
+                    urls.append(emb.video.url)
+
+                for u in urls:
+                    ok, name = MediaExtractor._matches_allowed_ext(u, allowed_exts)
+                    if ok:
+                        candidates.append((u, name))
+        except Exception:
+            pass
+
+        # 3) Optional explicit text links provided by caller (not message content)
+        if include_text_links and extra_text_links:
+            for u in extra_text_links:
+                ok, name = MediaExtractor._matches_allowed_ext(u, allowed_exts)
+                if ok:
+                    candidates.append((u, name))
+
+        return candidates
+
+import os
 import re
 from typing import List, Tuple
 import mimetypes

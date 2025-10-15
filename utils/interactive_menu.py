@@ -326,7 +326,7 @@ class MediaTypeView(discord.ui.View):
         """Download images only"""
         options = {
             'media_type': 'images',
-            'message_limit': 0,
+            'message_limit': 1000,  # Fix: was 0, now 1000 messages
             'date_range': 'All time'
         }
         
@@ -338,7 +338,7 @@ class MediaTypeView(discord.ui.View):
         """Download videos only"""
         options = {
             'media_type': 'videos',
-            'message_limit': 0,
+            'message_limit': 1000,  # Fix: was 0, now 1000 messages
             'date_range': 'All time'
         }
         
@@ -350,7 +350,7 @@ class MediaTypeView(discord.ui.View):
         """Download all media"""
         options = {
             'media_type': 'all',
-            'message_limit': 0,
+            'message_limit': 1000,  # Fix: was 0, now 1000 messages
             'date_range': 'All time'
         }
         
