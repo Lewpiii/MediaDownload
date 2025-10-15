@@ -52,10 +52,18 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'  # Format simplifié
 )
 
-# Définir l'intents (sans message_content pour éviter la vérification Discord)
+# Définir les intents (activer les messages pour l'historique et les pièces jointes)
 intents = discord.Intents.default()
 intents.guilds = True
-# Note: message_content retiré car non nécessaire pour les slash commands
+intents.messages = True  # nécessaire pour lire l'historique et voir les pièces jointes
+
+# Optionnel: autoriser le contenu des messages via variable d'environnement (privileged intent)
+try:
+    _enable_msg_content = os.getenv('ENABLE_MESSAGE_CONTENT', 'false').lower() in ('1', 'true', 'yes')
+    if _enable_msg_content:
+        intents.message_content = True
+except Exception:
+    pass
 
 logging.info(f"Token trouvé : {'✓' if os.getenv('DISCORD_TOKEN') else '✗'}")
 
@@ -69,7 +77,15 @@ class MediaDownloadBot(commands.Bot):
         
         intents = discord.Intents.default()
         intents.guilds = True
-        # Note: message_content retiré car non nécessaire pour les slash commands
+        intents.messages = True  # nécessaire pour fetch l'historique
+
+        # Optionnel: activer message_content si explicitement demandé
+        try:
+            _enable_msg_content = os.getenv('ENABLE_MESSAGE_CONTENT', 'false').lower() in ('1', 'true', 'yes')
+            if _enable_msg_content:
+                intents.message_content = True
+        except Exception:
+            pass
         
         super().__init__(
             command_prefix=commands.when_mentioned,
