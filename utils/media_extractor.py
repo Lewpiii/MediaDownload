@@ -60,10 +60,9 @@ class MediaExtractor:
                         filename = f"{filename}{guessed}"
 
             if relaxed and getattr(attachment, 'url', None):
-                # In relaxed mode, accept any attachment with either image/video mime OR any filename extension
-                if is_allowed_by_mime or bool(os.path.splitext(filename)[1]):
-                    results.append((attachment.url, filename))
-                    continue
+                # In relaxed mode, accept any attachment with a downloadable URL
+                results.append((attachment.url, filename))
+                continue
 
             if (is_allowed_by_ext or is_allowed_by_mime) and getattr(attachment, 'url', None):
                 results.append((attachment.url, filename))
