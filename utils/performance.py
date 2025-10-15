@@ -4,6 +4,7 @@ Performance optimization utilities for the Discord bot
 import asyncio
 import psutil
 import os
+import platform
 import time
 from typing import Dict, List, Optional
 import logging
@@ -23,9 +24,15 @@ class PerformanceOptimizer:
     async def optimize_system(self):
         """Apply system-level optimizations"""
         try:
-            # Set process priority to high
-            if hasattr(os, 'nice'):
-                os.nice(-5)  # Higher priority
+            # Set process priority to high (skip on Windows to avoid permission issues)
+            if platform.system() != 'Windows' and hasattr(os, 'nice'):
+                try:
+                    os.nice(-5)  # Higher priority
+                except PermissionError:
+                    logger.info("Skipping priority change: permission denied")
+            else:
+                # On Windows, avoid changing priority to prevent 'Operation not permitted'
+                logger.info("Skipping process priority optimization on Windows")
             
             # Optimize Python garbage collection
             import gc
