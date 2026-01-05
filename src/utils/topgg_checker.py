@@ -7,7 +7,7 @@ from discord.ext import commands
 import aiohttp
 import logging
 from functools import wraps
-from config import TOP_GG_TOKEN
+from ..config import TOP_GG_TOKEN
 
 logger = logging.getLogger('bot.topgg')
 
