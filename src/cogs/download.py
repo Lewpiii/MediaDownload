@@ -13,7 +13,7 @@ from ..utils.smart_classifier import smart_classifier
 from ..utils.interactive_menu import InteractiveDownloadMenu
 from ..utils.media_extractor import MediaExtractor
 from ..utils.download_service import DownloadService, ResourceMonitor
-from ..config import DOWNLOAD_CONFIG, MAX_DIRECT_DOWNLOAD_SIZE
+from ..config import DOWNLOAD_CONFIG, MAX_DIRECT_DOWNLOAD_SIZE, MEDIA_TYPES
 
 # Configuration
 logger = logging.getLogger('bot.download_cog')
@@ -24,11 +24,7 @@ class Download(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logger
-        self.media_types = {
-            'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff'],
-            'videos': ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv'],
-            'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv']
-        }
+        self.media_types = MEDIA_TYPES
         self.interactive_menu = InteractiveDownloadMenu(bot)
 
     @app_commands.command(name="download", description="Open interactive download menu with smart file organization")
@@ -152,10 +148,9 @@ class Download(commands.Cog):
                     media_list = MediaExtractor.extract(msg, allowed_exts=allowed_exts, include_text_links=False)
 
                     for url, suggested_name in media_list:
-                        file_ext = os.path.splitext(suggested_name)[1].lower()
-                        if file_ext not in allowed_exts:
-                            continue
-
+                        # Trust MediaExtractor results. Do not re-filter extension.
+                        # MediaExtractor handles "relaxed" mode and "trust discord" logic.
+                        
                         file_path = os.path.join(temp_dir, f"{len(downloaded_files)}_{suggested_name}")
 
                         should_pause, reason = monitor.should_pause()
