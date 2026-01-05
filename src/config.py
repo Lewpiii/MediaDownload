@@ -19,9 +19,9 @@ except (ValueError, TypeError):
 
 # Media Types
 MEDIA_TYPES = {
-    'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff'],
+    'images': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.avif'],
     'videos': ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv'],
-    'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv']
+    'all': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.avif', '.mp4', '.webm', '.mov', '.avi', '.mkv', '.flv']
 }
 
 # Limits

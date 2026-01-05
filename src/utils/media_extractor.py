@@ -92,8 +92,13 @@ class MediaExtractor:
             if thumb:
                 candidate_urls = [getattr(thumb, 'url', None), getattr(thumb, 'proxy_url', None)]
                 for u in candidate_urls:
-                    if u and cls._url_has_allowed_ext(u, allowed_exts):
-                        results.append((u, os.path.basename(urlparse(u).path) or f"thumb_{len(results)}"))
+                    if u:
+                         # Trust Discord: if it's in the thumbnail field, it's an image.
+                        path = urlparse(u).path
+                        filename = os.path.basename(path) or f"thumb_{len(results)}"
+                        if not os.path.splitext(filename)[1]:
+                            filename += ".jpg" # Default extension
+                        results.append((u, filename))
                         break
 
             # Video
