@@ -63,7 +63,7 @@ class VoteView(discord.ui.View):
             # Start the download automatically
             if self.download_options:
                 print(f"[DEBUG] Starting automatic download with options: {self.download_options}")
-                from cogs.download import Download
+                from ..cogs.download import Download
                 download_cog = interaction.client.get_cog('Download')
                 if download_cog:
                     await download_cog.start_interactive_download(interaction, self.download_options)

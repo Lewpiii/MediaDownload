@@ -429,7 +429,7 @@ class ConfirmationView(discord.ui.View):
         print(f"[DEBUG] Proceeding with download (voted or no checker)")
         # User has voted or vote check is disabled, proceed with download
         # Import here to avoid circular imports
-        from cogs.download import Download
+        from ..cogs.download import Download
         
         # Get the download cog
         download_cog = interaction.client.get_cog('Download')
