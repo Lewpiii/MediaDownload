@@ -6,29 +6,29 @@ echo
 
 # Vérifier si le bot tourne
 echo "1. Vérification des processus Python..."
-if pgrep -f "python.*bot.py" > /dev/null; then
+if pgrep -f "python.*src.bot" > /dev/null; then
     echo "   ✅ Bot en cours d'exécution"
-    pgrep -f "python.*bot.py" | while read pid; do
+    pgrep -f "python.*src.bot" | while read pid; do
         echo "   PID: $pid"
     done
 else
-    echo "   ❌ Aucun processus bot.py trouvé"
+    echo "   ❌ Aucun processus src.bot trouvé"
 fi
 
 echo
 
 # Vérifier les fichiers
 echo "2. Vérification des fichiers..."
-if [ -f "bot.py" ]; then
-    echo "   ✅ bot.py trouvé"
+if [ -f "src/bot.py" ]; then
+    echo "   ✅ src/bot.py trouvé"
 else
-    echo "   ❌ bot.py introuvable"
+    echo "   ❌ src/bot.py introuvable"
 fi
 
-if [ -f "cogs/download.py" ]; then
-    echo "   ✅ cogs/download.py trouvé"
+if [ -f "src/cogs/download.py" ]; then
+    echo "   ✅ src/cogs/download.py trouvé"
 else
-    echo "   ❌ cogs/download.py introuvable"
+    echo "   ❌ src/cogs/download.py introuvable"
 fi
 
 echo
@@ -62,10 +62,10 @@ echo
 
 # Recommandations
 echo "5. Recommandations:"
-if ! pgrep -f "python.*bot.py" > /dev/null; then
-    echo "   🔄 Redémarrer le bot: python3 bot.py"
+if ! pgrep -f "python.*src.bot" > /dev/null; then
+    echo "   🔄 Redémarrer le bot: python3 -m src.bot"
     echo "   📋 Vérifier les logs: tail -f bot.log"
 else
     echo "   ✅ Bot en cours d'exécution"
-    echo "   🔄 Si les commandes ne marchent pas, redémarrer: pkill -f python && python3 bot.py"
+    echo "   🔄 Si les commandes ne marchent pas, redémarrer: pkill -f python && python3 -m src.bot"
 fi

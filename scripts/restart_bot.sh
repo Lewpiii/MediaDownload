@@ -10,7 +10,7 @@ cd /home/botuser/discord-bot/MediaDownload
 
 # Arrêter tous les processus Python
 echo "1. Arrêt des processus existants..."
-sudo pkill -f "python.*bot.py" || true
+sudo pkill -f "python.*src.bot" || true
 sudo systemctl stop discord-bot || true
 sleep 2
 
