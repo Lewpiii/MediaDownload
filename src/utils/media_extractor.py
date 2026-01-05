@@ -77,8 +77,14 @@ class MediaExtractor:
             if image:
                 candidate_urls = [getattr(image, 'url', None), getattr(image, 'proxy_url', None)]
                 for u in candidate_urls:
-                    if u and cls._url_has_allowed_ext(u, allowed_exts):
-                        results.append((u, os.path.basename(urlparse(u).path) or f"image_{len(results)}"))
+                    # Trust Discord: if it's in the image field, it's an image.
+                    if u:
+                        # Fallback filename if no extension found
+                        path = urlparse(u).path
+                        filename = os.path.basename(path) or f"image_{len(results)}"
+                        if not os.path.splitext(filename)[1]:
+                            filename += ".jpg" # Default extension
+                        results.append((u, filename))
                         break
 
             # Thumbnail
@@ -95,8 +101,13 @@ class MediaExtractor:
             if video:
                 candidate_urls = [getattr(video, 'url', None), getattr(video, 'proxy_url', None)]
                 for u in candidate_urls:
-                    if u and cls._url_has_allowed_ext(u, allowed_exts):
-                        results.append((u, os.path.basename(urlparse(u).path) or f"video_{len(results)}"))
+                     # Trust Discord: if it's in the video field, it's a video.
+                    if u:
+                        path = urlparse(u).path
+                        filename = os.path.basename(path) or f"video_{len(results)}"
+                        if not os.path.splitext(filename)[1]:
+                            filename += ".mp4" # Default extension
+                        results.append((u, filename))
                         break
 
         # 3) Optional: plain-text links (only if caller opts-in)
